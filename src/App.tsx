@@ -1,28 +1,27 @@
-import { Header } from './components/Header'
-import { Footer } from './components/Footer'
-import { Hero } from './components/sections/Hero'
-import { Directions } from './components/sections/Directions'
-import { Wholesale } from './components/sections/Wholesale'
-import { Stations } from './components/sections/Stations'
-import { Transport } from './components/sections/Transport'
-import { About } from './components/sections/About'
-import { Contacts } from './components/sections/Contacts'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { PortalLayout } from './components/PortalLayout'
+import { Home } from './pages/Home'
+import { Wholesale } from './pages/Wholesale'
+import { Stations } from './pages/Stations'
+import { Transport } from './pages/Transport'
+import { About } from './pages/About'
+import { Contacts } from './pages/Contacts'
 
 function App() {
   return (
-    <div className="relative min-h-screen overflow-x-clip">
-      <Header />
-      <main>
-        <Hero />
-        <Directions />
-        <Wholesale />
-        <Stations />
-        <Transport />
-        <About />
-        <Contacts />
-      </main>
-      <Footer />
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<PortalLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/wholesale" element={<Wholesale />} />
+          <Route path="/stations" element={<Stations />} />
+          <Route path="/transport" element={<Transport />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contacts" element={<Contacts />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   )
 }
 

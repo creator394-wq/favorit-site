@@ -2,6 +2,7 @@ import { ArrowUpRight, Mail, MessageCircle, Phone, Send } from 'lucide-react'
 import { contacts } from '../data/contacts'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Reveal } from '../components/ui/Reveal'
+import { TiltCard } from '../components/ui/TiltCard'
 
 const cards = [
   {
@@ -10,8 +11,9 @@ const cards = [
     value: contacts.phoneDisplay,
     href: contacts.phoneHref,
     external: false,
-    accent: 'hover:border-accent-500/40',
-    iconBg: 'bg-accent-500/15 text-accent-400',
+    border: 'hover:border-accent-500/45',
+    iconBox: 'border-accent-500/30 bg-accent-500/12 text-accent-400',
+    glow: 'bg-accent-500/12',
   },
   {
     icon: MessageCircle,
@@ -19,8 +21,9 @@ const cards = [
     value: 'Написать в WhatsApp',
     href: contacts.whatsapp,
     external: true,
-    accent: 'hover:border-emerald-400/40',
-    iconBg: 'bg-emerald-400/15 text-emerald-400',
+    border: 'hover:border-emerald-400/45',
+    iconBox: 'border-emerald-400/30 bg-emerald-400/12 text-emerald-400',
+    glow: 'bg-emerald-400/10',
   },
   {
     icon: Send,
@@ -28,8 +31,9 @@ const cards = [
     value: 'Написать в Telegram',
     href: contacts.telegram,
     external: true,
-    accent: 'hover:border-sky-400/40',
-    iconBg: 'bg-sky-400/15 text-sky-400',
+    border: 'hover:border-sky-400/45',
+    iconBox: 'border-sky-400/30 bg-sky-400/12 text-sky-400',
+    glow: 'bg-sky-400/10',
   },
   {
     icon: Mail,
@@ -37,53 +41,60 @@ const cards = [
     value: contacts.email,
     href: `mailto:${contacts.email}`,
     external: false,
-    accent: 'hover:border-amber-400/40',
-    iconBg: 'bg-amber-400/15 text-amber-400',
+    border: 'hover:border-amber-400/45',
+    iconBox: 'border-amber-400/30 bg-amber-400/12 text-amber-400',
+    glow: 'bg-amber-400/10',
   },
 ]
 
 export function Contacts() {
   return (
     <>
-      <Reveal>
-        <PageHeader
-          badge="Контакты"
-          title="Связаться с нами"
-          subtitle="Только прямой контакт — позвоните или напишите менеджеру, ответим оперативно."
-        />
-      </Reveal>
+      <PageHeader
+        badge="Контакты"
+        title="Связаться"
+        accent="с нами"
+        subtitle="Только прямой контакт — позвоните или напишите менеджеру, ответим оперативно."
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
-        {cards.map((card, i) => (
-          <Reveal key={card.title} delay={i * 90} className="h-full">
-            <a
-              href={card.href}
-              {...(card.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-              className={`group glass flex h-full items-center gap-4 rounded-2xl p-5 transition-all duration-500 hover:-translate-y-1 sm:gap-5 sm:rounded-3xl sm:p-7 ${card.accent}`}
-            >
-              <span
-                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-500 group-hover:scale-110 sm:h-14 sm:w-14 sm:rounded-2xl ${card.iconBg}`}
-              >
-                <card.icon className="h-6 w-6" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <h2 className="text-base font-bold text-white sm:text-lg">{card.title}</h2>
-                <p className="mt-0.5 truncate text-sm text-zinc-400 sm:text-base">
-                  {card.value}
-                </p>
-              </span>
-              <ArrowUpRight className="h-5 w-5 shrink-0 text-zinc-500 transition-all duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-white" />
-            </a>
-          </Reveal>
-        ))}
-      </div>
+      <section className="mx-auto w-full max-w-7xl px-5 sm:px-8">
+        <div className="grid gap-5 sm:grid-cols-2">
+          {cards.map((card, i) => (
+            <Reveal key={card.title} delay={i * 90} className="h-full">
+              <TiltCard className="h-full">
+                <a
+                  href={card.href}
+                  {...(card.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                  className={`group panel relative flex h-full items-center gap-5 overflow-hidden rounded-3xl p-6 transition-colors duration-500 sm:gap-6 sm:p-8 ${card.border}`}
+                >
+                  <div
+                    className={`pointer-events-none absolute -top-14 -right-14 h-40 w-40 rounded-full blur-3xl ${card.glow}`}
+                  />
+                  <span
+                    className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border transition-transform duration-500 group-hover:scale-110 sm:h-16 sm:w-16 ${card.iconBox}`}
+                  >
+                    <card.icon className="h-7 w-7" />
+                  </span>
+                  <span className="relative min-w-0 flex-1">
+                    <h2 className="font-display text-base font-bold text-white sm:text-xl">
+                      {card.title}
+                    </h2>
+                    <p className="mt-1 truncate text-sm text-zinc-400 sm:text-base">{card.value}</p>
+                  </span>
+                  <ArrowUpRight className="relative h-5 w-5 shrink-0 text-zinc-500 transition-all duration-300 group-hover:translate-x-1 group-hover:-translate-y-1 group-hover:text-white" />
+                </a>
+              </TiltCard>
+            </Reveal>
+          ))}
+        </div>
 
-      <Reveal delay={200}>
-        <p className="mt-6 text-sm text-zinc-500">
-          Обращения принимаются только по телефону, в WhatsApp, Telegram и по email —
-          без форм и онлайн-заявок.
-        </p>
-      </Reveal>
+        <Reveal delay={200}>
+          <p className="mt-7 text-sm text-zinc-500">
+            Обращения принимаются только по телефону, в WhatsApp, Telegram и по email —
+            без форм и онлайн-заявок.
+          </p>
+        </Reveal>
+      </section>
     </>
   )
 }

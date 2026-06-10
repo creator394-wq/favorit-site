@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { PortalLayout } from './components/PortalLayout'
+import { SiteLayout } from './components/layout/SiteLayout'
 import { Home } from './pages/Home'
 import { Wholesale } from './pages/Wholesale'
 import { Stations } from './pages/Stations'
@@ -11,7 +11,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<PortalLayout />}>
+        <Route element={<SiteLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/wholesale" element={<Wholesale />} />
           <Route path="/stations" element={<Stations />} />

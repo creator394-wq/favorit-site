@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@theme {
+  --color-graphite-950: #07090c;
+  --color-graphite-900: #0d1015;
+  --color-graphite-850: #12161d;
+  --color-graphite-800: #171c25;
+  --color-graphite-700: #232a37;
+  --color-graphite-600: #313b4d;
+
+  --color-accent-600: #f0640a;
+  --color-accent-500: #ff7a1a;
+  --color-accent-400: #ff9540;
+  --color-amber-400: #ffb347;
+  --color-flame-600: #e8401f;
+
+  --font-display: "Unbounded", system-ui, sans-serif;
+  --font-sans: "Manrope", system-ui, sans-serif;
+
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-float-slow: float 11s ease-in-out infinite;
+  --animate-pulse-glow: pulse-glow 5s ease-in-out infinite;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-14px);
+    }
+  }
+
+  @keyframes pulse-glow {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 88px;
+}
+
+body {
+  @apply bg-graphite-950 font-sans text-zinc-300 antialiased;
+}
+
+::selection {
+  @apply bg-accent-500/30 text-white;
+}
+
+@utility glass {
+  background: rgb(255 255 255 / 0.04);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgb(255 255 255 / 0.08);
+}
+
+@utility bg-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+@utility bg-diagonal {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgb(255 255 255 / 0.035) 0,
+    rgb(255 255 255 / 0.035) 1px,
+    transparent 1px,
+    transparent 12px
+  );
+}
+
+@utility text-gradient-fire {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-amber-400),
+    var(--color-accent-500) 50%,
+    var(--color-flame-600)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility glow-accent {
+  box-shadow:
+    0 0 28px rgb(255 122 26 / 0.32),
+    0 0 80px rgb(255 122 26 / 0.12);
+}

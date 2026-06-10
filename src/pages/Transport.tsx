@@ -47,7 +47,7 @@ export function Transport() {
         <div className="relative mx-auto w-full max-w-6xl px-5 sm:px-8">
           <Reveal>
             <div className="flex w-full justify-center overflow-hidden">
-              <TankerScene className="h-auto w-full min-w-[560px] sm:min-w-0" />
+              <TankerScene className="h-auto w-full min-w-[640px] sm:min-w-0" />
             </div>
           </Reveal>
           <Reveal delay={150}>

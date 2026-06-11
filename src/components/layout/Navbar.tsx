@@ -2,31 +2,22 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { Menu, Phone, X } from 'lucide-react'
 import { contacts } from '../../data/contacts'
+import { navItems } from '../../config/nav'
 import { ContactButtons } from '../ui/ContactButtons'
 
-export const navItems = [
-  { to: '/', label: 'Главная' },
-  { to: '/wholesale', label: 'Опт' },
-  { to: '/stations', label: 'Заправки' },
-  { to: '/transport', label: 'Транспорт' },
-  { to: '/about', label: 'О компании' },
-  { to: '/contacts', label: 'Контакты' },
-]
-
+/** Спокойный wordmark: знак-литера + название. Без вращений и градиентов. */
 export function Logo({ onClick }: { onClick?: () => void }) {
   return (
-    <Link to="/" onClick={onClick} className="group flex items-center gap-3">
-      <span className="relative flex h-10 w-10 rotate-45 items-center justify-center rounded-[10px] bg-gradient-to-br from-accent-500 to-flame-600 shadow-lg shadow-accent-500/30 transition-transform duration-500 group-hover:rotate-[135deg]">
-        <span className="font-display -rotate-45 text-base font-bold text-white transition-transform duration-500 group-hover:rotate-[-135deg]">
-          Ф
-        </span>
+    <Link to="/" onClick={onClick} className="flex items-center gap-3">
+      <span className="font-display flex h-9 w-9 items-center justify-center bg-accent-500 text-base font-bold text-graphite-950">
+        Ф
       </span>
       <span className="leading-none">
-        <span className="font-display block text-lg font-bold tracking-wide text-white">
+        <span className="font-display block text-lg font-bold tracking-[0.08em] text-white">
           ФАВОРИТ
         </span>
-        <span className="mt-1 block text-[10px] font-semibold tracking-[0.3em] text-zinc-500 uppercase">
-          Топливо · СУГ · АЗС
+        <span className="mt-1 block text-[10px] font-medium tracking-[0.28em] text-zinc-500 uppercase">
+          СУГ · Нефтепродукты · АЗС
         </span>
       </span>
     </Link>
@@ -55,23 +46,23 @@ export function Navbar() {
   return (
     <>
       <header
-        className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${
+        className={`fixed inset-x-0 top-0 z-50 transition-colors duration-500 ${
           scrolled
-            ? 'border-b border-white/8 bg-graphite-950/80 backdrop-blur-xl'
+            ? 'border-b border-white/10 bg-graphite-950/95 backdrop-blur-sm'
             : 'border-b border-transparent bg-transparent'
         }`}
       >
         <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-6 px-5 sm:px-8">
           <Logo />
 
-          <nav className="hidden items-center gap-1 lg:flex" aria-label="Основная навигация">
+          <nav className="hidden items-center gap-7 lg:flex" aria-label="Основная навигация">
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.to === '/'}
                 className={({ isActive }) =>
-                  `relative rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-300 ${
+                  `relative py-2 text-sm font-medium transition-colors duration-300 ${
                     isActive ? 'text-white' : 'text-zinc-400 hover:text-white'
                   }`
                 }
@@ -80,7 +71,7 @@ export function Navbar() {
                   <>
                     {item.label}
                     <span
-                      className={`absolute inset-x-4 -bottom-0.5 h-0.5 rounded-full bg-gradient-to-r from-accent-500 to-flame-600 transition-all duration-300 ${
+                      className={`absolute inset-x-0 -bottom-0.5 h-px bg-accent-500 transition-opacity duration-300 ${
                         isActive ? 'opacity-100' : 'opacity-0'
                       }`}
                     />
@@ -93,7 +84,7 @@ export function Navbar() {
           <div className="flex items-center gap-3">
             <a
               href={contacts.phoneHref}
-              className="hidden items-center gap-2.5 rounded-full bg-gradient-to-r from-accent-600 to-flame-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-accent-500/25 transition-all duration-300 hover:shadow-accent-500/50 md:inline-flex"
+              className="hidden items-center gap-2.5 border border-white/20 px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-300 hover:border-accent-500 hover:text-accent-400 md:inline-flex"
             >
               <Phone className="h-4 w-4" />
               {contacts.phoneDisplay}
@@ -102,7 +93,7 @@ export function Navbar() {
               type="button"
               onClick={() => setOpen(true)}
               aria-label="Открыть меню"
-              className="glass flex h-11 w-11 items-center justify-center rounded-xl text-white transition-colors duration-300 hover:border-accent-500/40 lg:hidden"
+              className="flex h-11 w-11 items-center justify-center border border-white/15 text-white transition-colors duration-300 hover:border-accent-500 lg:hidden"
             >
               <Menu className="h-5 w-5" />
             </button>
@@ -112,28 +103,24 @@ export function Navbar() {
 
       {/* полноэкранное мобильное меню */}
       <div
-        className={`fixed inset-0 z-[60] flex flex-col bg-graphite-950/95 backdrop-blur-2xl transition-all duration-500 lg:hidden ${
+        className={`fixed inset-0 z-[60] flex flex-col bg-graphite-950/98 backdrop-blur-sm transition-opacity duration-400 lg:hidden ${
           open ? 'visible opacity-100' : 'invisible opacity-0'
         }`}
       >
-        <div className="pointer-events-none absolute inset-0 bg-grid opacity-40" />
-        <div className="pointer-events-none absolute -top-32 right-0 h-96 w-96 rounded-full bg-accent-500/12 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 -left-24 h-80 w-80 rounded-full bg-gas-500/8 blur-3xl" />
-
-        <div className="relative flex h-20 items-center justify-between px-5 sm:px-8">
+        <div className="flex h-20 items-center justify-between px-5 sm:px-8">
           <Logo onClick={() => setOpen(false)} />
           <button
             type="button"
             onClick={() => setOpen(false)}
             aria-label="Закрыть меню"
-            className="glass flex h-11 w-11 items-center justify-center rounded-xl text-white"
+            className="flex h-11 w-11 items-center justify-center border border-white/15 text-white"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <nav
-          className="relative flex flex-1 flex-col justify-center gap-1 px-7 sm:px-10"
+          className="flex flex-1 flex-col justify-center px-7 sm:px-10"
           aria-label="Мобильная навигация"
         >
           {open &&
@@ -143,24 +130,22 @@ export function Navbar() {
                 to={item.to}
                 end={item.to === '/'}
                 onClick={() => setOpen(false)}
-                style={{ animationDelay: `${80 + i * 60}ms` }}
+                style={{ animationDelay: `${60 + i * 50}ms` }}
                 className={({ isActive }) =>
-                  `menu-item-in font-display flex items-center gap-4 py-3 text-3xl font-bold tracking-wide transition-colors duration-300 sm:text-4xl ${
-                    isActive ? 'text-gradient-fire' : 'text-zinc-300 hover:text-white'
+                  `menu-item-in font-display flex items-baseline gap-4 border-b border-white/8 py-4 text-3xl font-semibold tracking-tight transition-colors duration-300 sm:text-4xl ${
+                    isActive ? 'text-accent-400' : 'text-zinc-200 hover:text-white'
                   }`
                 }
               >
-                <span className="text-sm font-semibold text-zinc-600">
-                  0{i + 1}
-                </span>
+                <span className="text-xs font-medium text-zinc-600">0{i + 1}</span>
                 {item.label}
               </NavLink>
             ))}
         </nav>
 
-        <div className="relative px-7 pb-10 sm:px-10">
+        <div className="px-7 pb-10 sm:px-10">
           {open && (
-            <div className="menu-item-in" style={{ animationDelay: '480ms' }}>
+            <div className="menu-item-in" style={{ animationDelay: '420ms' }}>
               <ContactButtons />
             </div>
           )}

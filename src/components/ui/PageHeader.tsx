@@ -1,49 +1,44 @@
 import { useEffect } from 'react'
-import { RouteLines } from '../scene/RouteLines'
+import type { AssetSlot } from '../../config/assets'
 
 interface PageHeaderProps {
-  badge: string
+  /** Слот-изображение раздела (см. src/config/assets.ts) */
+  image: AssetSlot
+  kicker: string
   title: string
-  /** часть заголовка, выделяемая градиентом */
-  accent?: string
   subtitle?: string
-  tone?: 'fire' | 'gas'
 }
 
-/** Кинематографичная шапка внутренних страниц: маршруты, свечение, крупный заголовок. */
-export function PageHeader({ badge, title, accent, subtitle, tone = 'fire' }: PageHeaderProps) {
+/**
+ * Фото-хедер внутреннего раздела: полноширинное slot-изображение,
+ * затемнение под текст, крупный заголовок. Замена файла слота —
+ * единственное, что нужно для финального вида.
+ */
+export function PageHeader({ image, kicker, title, subtitle }: PageHeaderProps) {
   useEffect(() => {
-    document.title = `${title}${accent ? ` ${accent}` : ''} — ООО «Фаворит»`
-  }, [title, accent])
+    document.title = `${title} — ООО «Фаворит»`
+  }, [title])
 
   return (
-    <section className="relative overflow-hidden pt-36 pb-14 sm:pt-40 sm:pb-16">
-      <div className="pointer-events-none absolute inset-0 bg-grid opacity-60 [mask-image:radial-gradient(70%_70%_at_50%_30%,black,transparent)]" />
-      <RouteLines className="pointer-events-none absolute inset-0 h-full w-full" tone={tone} opacity={0.7} />
-      <div
-        className={`pointer-events-none absolute -top-24 right-[12%] h-72 w-72 rounded-full blur-3xl ${
-          tone === 'gas' ? 'bg-gas-500/14' : 'bg-accent-500/14'
-        }`}
+    <section className="relative flex min-h-[52svh] items-end overflow-hidden sm:min-h-[58svh]">
+      <img
+        src={image.src}
+        alt={image.alt}
+        className="absolute inset-0 h-full w-full object-cover"
       />
+      {/* затемнение: низ под текст, верх под шапку */}
+      <div className="absolute inset-0 bg-gradient-to-t from-graphite-950 via-graphite-950/40 to-graphite-950/30" />
 
-      <div className="relative mx-auto w-full max-w-7xl px-5 sm:px-8">
-        <span className="glass inline-flex items-center gap-2 rounded-full px-4 py-2 text-[11px] font-semibold tracking-[0.24em] text-accent-400 uppercase">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent-500 led-dot" />
-          {badge}
-        </span>
-        <h1 className="font-display mt-6 max-w-4xl text-3xl leading-[1.12] font-bold text-white sm:text-5xl lg:text-6xl">
+      <div className="relative mx-auto w-full max-w-7xl px-5 pt-40 pb-12 sm:px-8 sm:pb-16">
+        <p className="flex items-center gap-3 text-xs font-semibold tracking-[0.28em] text-accent-400 uppercase">
+          <span className="h-px w-8 bg-accent-500" />
+          {kicker}
+        </p>
+        <h1 className="font-display mt-5 max-w-4xl text-4xl leading-[1.05] font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
           {title}
-          {accent && (
-            <>
-              {' '}
-              <span className={tone === 'gas' ? 'text-gradient-gas' : 'text-gradient-fire'}>
-                {accent}
-              </span>
-            </>
-          )}
         </h1>
         {subtitle && (
-          <p className="mt-6 max-w-2xl text-base leading-relaxed text-zinc-400 sm:text-lg">
+          <p className="mt-5 max-w-2xl text-base leading-relaxed text-zinc-300 sm:text-lg">
             {subtitle}
           </p>
         )}

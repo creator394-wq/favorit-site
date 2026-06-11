@@ -1,12 +1,5 @@
 import type { NewsItem } from '../data/news'
-
-function formatDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-}
+import { formatDate } from '../lib/format'
 
 export function NewsCard({ item }: { item: NewsItem }) {
   return (

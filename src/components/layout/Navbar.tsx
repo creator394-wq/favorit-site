@@ -4,6 +4,8 @@ import { Menu, Phone, X } from 'lucide-react'
 import { contacts } from '../../data/contacts'
 import { navItems } from '../../config/nav'
 import { ContactButtons } from '../ui/ContactButtons'
+import { Magnetic } from '../motion/Magnetic'
+import { lenis } from '../motion/SmoothScroll'
 
 /** Спокойный wordmark: знак-литера + название. Без вращений и градиентов. */
 export function Logo({ onClick }: { onClick?: () => void }) {
@@ -26,27 +28,40 @@ export function Logo({ onClick }: { onClick?: () => void }) {
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
+  const [hidden, setHidden] = useState(false)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24)
+    let lastY = window.scrollY
+    const onScroll = () => {
+      const y = window.scrollY
+      setScrolled(y > 24)
+      // premium-паттерн: шапка прячется при скролле вниз, возвращается при скролле вверх
+      setHidden(y > 140 && y > lastY)
+      lastY = y
+    }
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // блокируем прокрутку под полноэкранным меню
+  // блокируем прокрутку под полноэкранным меню (включая Lenis)
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
+    if (open) lenis?.stop()
+    else lenis?.start()
     return () => {
       document.body.style.overflow = ''
+      lenis?.start()
     }
   }, [open])
 
   return (
     <>
       <header
-        className={`fixed inset-x-0 top-0 z-50 transition-colors duration-500 ${
+        className={`fixed inset-x-0 top-0 z-50 transition-[background-color,border-color,transform] duration-500 ${
+          hidden && !open ? '-translate-y-full' : 'translate-y-0'
+        } ${
           scrolled
             ? 'border-b border-white/10 bg-graphite-950/95 backdrop-blur-sm'
             : 'border-b border-transparent bg-transparent'
@@ -62,7 +77,7 @@ export function Navbar() {
                 to={item.to}
                 end={item.to === '/'}
                 className={({ isActive }) =>
-                  `relative py-2 text-sm font-medium transition-colors duration-300 ${
+                  `group/nav relative py-2 text-sm font-medium transition-colors duration-300 ${
                     isActive ? 'text-white' : 'text-zinc-400 hover:text-white'
                   }`
                 }
@@ -70,9 +85,10 @@ export function Navbar() {
                 {({ isActive }) => (
                   <>
                     {item.label}
+                    {/* активная линия + hover-линия, растущая слева */}
                     <span
-                      className={`absolute inset-x-0 -bottom-0.5 h-px bg-accent-500 transition-opacity duration-300 ${
-                        isActive ? 'opacity-100' : 'opacity-0'
+                      className={`absolute inset-x-0 -bottom-0.5 h-px origin-left bg-accent-500 transition-transform duration-300 ease-out ${
+                        isActive ? 'scale-x-100' : 'scale-x-0 group-hover/nav:scale-x-100'
                       }`}
                     />
                   </>
@@ -82,13 +98,15 @@ export function Navbar() {
           </nav>
 
           <div className="flex items-center gap-3">
-            <a
-              href={contacts.phoneHref}
-              className="hidden items-center gap-2.5 border border-white/20 px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-300 hover:border-accent-500 hover:text-accent-400 md:inline-flex"
-            >
-              <Phone className="h-4 w-4" />
-              {contacts.phoneDisplay}
-            </a>
+            <Magnetic className="hidden md:inline-block">
+              <a
+                href={contacts.phoneHref}
+                className="inline-flex items-center gap-2.5 border border-white/20 px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-300 hover:border-accent-500 hover:text-accent-400"
+              >
+                <Phone className="h-4 w-4" />
+                {contacts.phoneDisplay}
+              </a>
+            </Magnetic>
             <button
               type="button"
               onClick={() => setOpen(true)}

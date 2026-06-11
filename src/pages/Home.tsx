@@ -1,43 +1,42 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, ArrowUpRight } from 'lucide-react'
-import { news, newsCategories, type NewsCategory } from '../data/news'
+import { useGSAP } from '@gsap/react'
+import { gsap, prefersReducedMotion } from '../lib/gsap'
+import { news } from '../data/news'
 import { company, contacts } from '../data/contacts'
 import { assets } from '../config/assets'
-import { NewsCard } from '../components/NewsCard'
+import { formatDate } from '../lib/format'
 import { Reveal } from '../components/ui/Reveal'
 import { ContactButtons } from '../components/ui/ContactButtons'
+import { SplitHeading } from '../components/motion/SplitHeading'
+import { Magnetic } from '../components/motion/Magnetic'
+import { Counter } from '../components/motion/Counter'
+import { Marquee } from '../components/motion/Marquee'
+import { ParallaxImage } from '../components/motion/ParallaxImage'
 
 const directions = [
   {
     to: '/wholesale',
     image: assets.wholesale,
+    num: '01',
     title: 'Оптовые поставки',
-    text: 'СУГ и нефтепродукты оптовыми партиями для юридических лиц.',
+    text: 'СУГ и нефтепродукты оптовыми партиями для юридических лиц. Договор, документооборот, прозрачные условия.',
   },
   {
     to: '/stations',
     image: assets.stations,
+    num: '02',
     title: 'Автозаправочные станции',
-    text: 'Собственные АЗС с актуальными ценами на топливо.',
+    text: 'Собственные АЗС с актуальными ценами на топливо. Розница под контролем компании.',
   },
   {
     to: '/transport',
     image: assets.transport,
+    num: '03',
     title: 'Транспортные услуги',
-    text: 'Перевозка топлива и СУГ по согласованным маршрутам.',
+    text: 'Перевозка топлива и СУГ специализированным транспортом по согласованным маршрутам.',
   },
-]
-
-const stats = [
-  {
-    value: `${new Date().getFullYear() - company.sinceYear}+`,
-    label: 'лет работы',
-    sub: `с ${company.sinceYear} года`,
-  },
-  { value: '4', label: 'направления', sub: 'опт, АЗС, транспорт' },
-  { value: 'СУГ', label: 'и нефтепродукты', sub: 'опт и розница' },
-  { value: '100%', label: 'прямой контакт', sub: 'без посредников и форм' },
 ]
 
 const workflow = [
@@ -47,52 +46,129 @@ const workflow = [
   { step: '04', title: 'Поставка', text: 'Доставка в срок и полный пакет документов.' },
 ]
 
-type Filter = NewsCategory | 'Все'
+const years = new Date().getFullYear() - company.sinceYear
 
 export function Home() {
-  const [filter, setFilter] = useState<Filter>('Все')
-  const filtered = filter === 'Все' ? news : news.filter((n) => n.category === filter)
+  const hero = useRef<HTMLElement>(null)
+  const heroImg = useRef<HTMLImageElement>(null)
+  const dirSection = useRef<HTMLElement>(null)
+  const track = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     document.title = 'ООО «Фаворит» — топливо, СУГ и логистика'
   }, [])
 
+  /* ===== HERO: въезд камеры + параллакс при скролле ===== */
+  useGSAP(
+    () => {
+      if (prefersReducedMotion()) return
+
+      gsap.fromTo(
+        heroImg.current,
+        { scale: 1.22 },
+        { scale: 1.06, duration: 2.2, ease: 'power3.out' },
+      )
+      gsap.to(heroImg.current, {
+        yPercent: 14,
+        ease: 'none',
+        scrollTrigger: { trigger: hero.current, start: 'top top', end: 'bottom top', scrub: true },
+      })
+      // контент уезжает и гаснет, пока hero покидает кадр — глубина сцены
+      gsap.to('[data-hero-content]', {
+        yPercent: -14,
+        opacity: 0,
+        ease: 'none',
+        scrollTrigger: { trigger: hero.current, start: 'top top', end: '75% top', scrub: true },
+      })
+      gsap.from('[data-hero-fade]', {
+        opacity: 0,
+        y: 26,
+        duration: 1,
+        stagger: 0.12,
+        delay: 0.55,
+        ease: 'power3.out',
+      })
+      gsap.from('[data-hero-line]', {
+        scaleX: 0,
+        transformOrigin: 'left center',
+        duration: 1,
+        delay: 0.4,
+        ease: 'power3.inOut',
+      })
+    },
+    { scope: hero },
+  )
+
+  /* ===== НАПРАВЛЕНИЯ: pinned horizontal scroll на desktop ===== */
+  useGSAP(
+    () => {
+      const mm = gsap.matchMedia()
+      mm.add('(min-width: 1024px) and (prefers-reduced-motion: no-preference)', () => {
+        const t = track.current!
+        const getX = () => -(t.scrollWidth - window.innerWidth)
+        gsap.to(t, {
+          x: getX,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: dirSection.current,
+            start: 'top top',
+            end: () => `+=${-getX()}`,
+            pin: true,
+            scrub: 1,
+            invalidateOnRefresh: true,
+          },
+        })
+      })
+      return () => mm.revert()
+    },
+    { scope: dirSection },
+  )
+
+  const featured = news[0]
+  const rest = news.slice(1, 5)
+
   return (
     <>
-      {/* ===== HERO: полноэкранный slot-asset + типографика ===== */}
-      <section className="relative flex min-h-svh flex-col">
-        <img
-          src={assets.hero.src}
-          alt={assets.hero.alt}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-        {/* затемнение: лево под заголовок, низ под полосу фактов */}
-        <div className="absolute inset-0 bg-gradient-to-r from-graphite-950/85 via-graphite-950/45 to-graphite-950/15" />
-        <div className="absolute inset-0 bg-gradient-to-t from-graphite-950 via-transparent to-graphite-950/35" />
+      {/* ===== CINEMATIC HERO ===== */}
+      <section ref={hero} className="relative flex min-h-svh flex-col overflow-hidden">
+        <div className="absolute inset-0">
+          <img
+            ref={heroImg}
+            src={assets.hero.src}
+            alt={assets.hero.alt}
+            className="h-full w-full object-cover will-change-transform"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-graphite-950/90 via-graphite-950/45 to-graphite-950/10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-graphite-950 via-transparent to-graphite-950/40" />
+        </div>
 
         <div className="relative mx-auto flex w-full max-w-7xl flex-1 items-center px-5 pt-28 pb-10 sm:px-8">
-          <div className="max-w-2xl">
-            <Reveal>
-              <p className="flex items-center gap-3 text-xs font-semibold tracking-[0.28em] text-accent-400 uppercase">
-                <span className="h-px w-8 bg-accent-500" />
-                Топливо · СУГ · Логистика
-              </p>
-            </Reveal>
-            <Reveal delay={90}>
-              <h1 className="font-display mt-6 text-4xl leading-[1.04] font-bold tracking-tight text-white sm:text-6xl lg:text-7xl">
-                Поставки СУГ
-                <br />
-                и нефтепродуктов
-              </h1>
-            </Reveal>
-            <Reveal delay={180}>
-              <p className="mt-6 max-w-xl text-base leading-relaxed text-zinc-300 sm:text-lg">
-                Оптовые поставки для бизнеса, собственные АЗС и перевозка топлива —
-                одна система под контролем компании с {company.sinceYear} года.
-              </p>
-            </Reveal>
-            <Reveal delay={260}>
-              <div className="mt-9 flex flex-wrap items-center gap-3 sm:gap-4">
+          <div data-hero-content className="max-w-3xl will-change-transform">
+            <p
+              data-hero-fade
+              className="flex items-center gap-3 text-xs font-semibold tracking-[0.3em] text-accent-400 uppercase"
+            >
+              <span data-hero-line className="h-px w-10 bg-accent-500" />
+              Топливо · СУГ · Логистика
+            </p>
+            <SplitHeading
+              as="h1"
+              onScroll={false}
+              delay={0.35}
+              className="font-display mt-7 text-[2.7rem] leading-[0.98] font-bold tracking-tight text-white sm:text-7xl lg:text-[5.6rem]"
+            >
+              Энергия в движении
+            </SplitHeading>
+            <p
+              data-hero-fade
+              className="mt-7 max-w-xl text-base leading-relaxed text-zinc-300 sm:text-lg"
+            >
+              Оптовые поставки СУГ и нефтепродуктов, собственные АЗС и
+              специализированный транспорт — одна система под контролем компании
+              с {company.sinceYear} года.
+            </p>
+            <div data-hero-fade className="mt-10 flex flex-wrap items-center gap-3 sm:gap-4">
+              <Magnetic>
                 <Link
                   to="/wholesale"
                   className="group inline-flex items-center gap-2.5 bg-accent-500 px-7 py-4 text-sm font-semibold text-graphite-950 transition-colors duration-300 hover:bg-accent-400 sm:text-base"
@@ -100,72 +176,117 @@ export function Home() {
                   Оптовые поставки
                   <ArrowRight className="h-4.5 w-4.5 transition-transform duration-300 group-hover:translate-x-1" />
                 </Link>
+              </Magnetic>
+              <Magnetic>
                 <Link
                   to="/stations"
                   className="inline-flex items-center gap-2.5 border border-white/25 px-7 py-4 text-sm font-semibold text-white transition-colors duration-300 hover:border-white/60 sm:text-base"
                 >
                   Заправки и цены
                 </Link>
-              </div>
-            </Reveal>
+              </Magnetic>
+            </div>
+          </div>
+
+          {/* scroll-индикатор */}
+          <div
+            data-hero-fade
+            className="absolute right-8 bottom-8 hidden flex-col items-center gap-3 lg:flex"
+            aria-hidden="true"
+          >
+            <span className="text-[10px] font-semibold tracking-[0.3em] text-zinc-500 uppercase [writing-mode:vertical-rl]">
+              Скролл
+            </span>
+            <span className="relative h-16 w-px overflow-hidden bg-white/15">
+              <span className="absolute top-0 left-0 h-5 w-px animate-[scroll-hint_1.8s_ease-in-out_infinite] bg-accent-500" />
+            </span>
           </div>
         </div>
 
-        {/* полоса фактов */}
-        <div className="relative border-t border-white/10">
+        {/* полоса фактов: счётчики */}
+        <div data-hero-fade className="relative border-t border-white/10 backdrop-blur-[2px]">
           <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-y-6 px-5 py-7 sm:px-8 lg:grid-cols-4">
-            {stats.map((s, i) => (
-              <Reveal key={s.label} delay={i * 70}>
-                <div className={i > 0 ? 'lg:border-l lg:border-white/10 lg:pl-8' : ''}>
-                  <div className="font-display text-2xl font-bold text-white">
-                    {s.value}{' '}
-                    <span className="text-sm font-medium text-zinc-300">{s.label}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-zinc-500">{s.sub}</p>
-                </div>
-              </Reveal>
-            ))}
+            <div>
+              <div className="font-display text-3xl font-bold text-white">
+                <Counter value={years} suffix="+" />
+              </div>
+              <p className="mt-1 text-xs tracking-wide text-zinc-400">лет работы · с {company.sinceYear}</p>
+            </div>
+            <div className="lg:border-l lg:border-white/10 lg:pl-8">
+              <div className="font-display text-3xl font-bold text-white">
+                <Counter value={4} />
+              </div>
+              <p className="mt-1 text-xs tracking-wide text-zinc-400">направления деятельности</p>
+            </div>
+            <div className="lg:border-l lg:border-white/10 lg:pl-8">
+              <div className="font-display text-3xl font-bold text-white">СУГ</div>
+              <p className="mt-1 text-xs tracking-wide text-zinc-400">и нефтепродукты · опт и розница</p>
+            </div>
+            <div className="lg:border-l lg:border-white/10 lg:pl-8">
+              <div className="font-display text-3xl font-bold text-white">
+                <Counter value={100} suffix="%" />
+              </div>
+              <p className="mt-1 text-xs tracking-wide text-zinc-400">прямой контакт · без посредников</p>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ===== НАПРАВЛЕНИЯ: фото-карточки ===== */}
-      <section id="directions" className="scroll-mt-24 py-20 sm:py-28">
+      <Marquee
+        items={['СУГ', 'Нефтепродукты', 'АЗС', 'Транспорт', `С ${company.sinceYear} года`, 'Прямой контакт']}
+      />
+
+      {/* ===== НАПРАВЛЕНИЯ: горизонтальная кино-лента ===== */}
+      <section ref={dirSection} className="relative overflow-hidden py-20 lg:flex lg:min-h-svh lg:flex-col lg:justify-center lg:py-0">
         <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
           <Reveal>
-            <p className="text-xs font-semibold tracking-[0.28em] text-zinc-500 uppercase">
+            <p className="text-xs font-semibold tracking-[0.3em] text-zinc-500 uppercase">
               Направления
             </p>
-            <h2 className="font-display mt-4 max-w-2xl text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Четыре направления — одна система
-            </h2>
           </Reveal>
+          <SplitHeading className="font-display mt-4 max-w-3xl text-3xl font-bold tracking-tight text-white sm:text-5xl">
+            Четыре направления — одна система
+          </SplitHeading>
+        </div>
 
-          <div className="mt-12 grid gap-5 md:grid-cols-3">
-            {directions.map((d, i) => (
-              <Reveal key={d.to} delay={i * 100} className="h-full">
-                <Link
-                  to={d.to}
-                  className="group flex h-full flex-col border border-white/10 bg-graphite-900/60 transition-colors duration-300 hover:border-white/30"
-                >
-                  <div className="relative aspect-[4/3] overflow-hidden">
-                    <img
-                      src={d.image.src}
-                      alt={d.image.alt}
-                      loading="lazy"
-                      className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-graphite-950/70 via-transparent to-transparent" />
-                    <ArrowUpRight className="absolute top-4 right-4 h-5 w-5 text-white/70 transition-all duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-white" />
-                  </div>
-                  <div className="flex flex-1 flex-col p-6 sm:p-7">
-                    <h3 className="font-display text-lg leading-snug font-semibold text-white">
+        <div className="mt-12 lg:mt-16">
+          <div ref={track} className="flex flex-col gap-10 px-5 sm:px-8 lg:w-max lg:flex-row lg:gap-8 lg:pr-[20vw]">
+            {directions.map((d) => (
+              <Link
+                key={d.to}
+                to={d.to}
+                className="group relative block w-full shrink-0 lg:w-[58vw] xl:w-[52vw]"
+              >
+                <div className="relative aspect-[16/10] overflow-hidden lg:aspect-auto lg:h-[58vh]">
+                  <ParallaxImage
+                    src={d.image.src}
+                    alt={d.image.alt}
+                    depth={7}
+                    className="absolute inset-0 transition-transform duration-[1.2s] ease-out group-hover:scale-[1.04]"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-graphite-950/85 via-graphite-950/15 to-transparent" />
+                  {/* номер-водяной знак */}
+                  <span className="font-display absolute -top-4 right-4 text-[7rem] leading-none font-bold text-white/8 select-none sm:text-[9rem]">
+                    {d.num}
+                  </span>
+                  <span className="font-display absolute top-5 left-6 text-sm font-semibold tracking-[0.25em] text-white/60">
+                    {d.num}
+                  </span>
+                  <ArrowUpRight className="absolute top-5 right-6 h-6 w-6 text-white/60 transition-all duration-300 group-hover:translate-x-1 group-hover:-translate-y-1 group-hover:text-accent-400" />
+                  <div className="absolute right-6 bottom-6 left-6 sm:right-10 sm:bottom-8 sm:left-10">
+                    <h3 className="font-display text-2xl leading-tight font-bold text-white sm:text-4xl">
                       {d.title}
                     </h3>
-                    <p className="mt-2.5 text-sm leading-relaxed text-zinc-400">{d.text}</p>
+                    <p className="mt-3 max-w-lg text-sm leading-relaxed text-zinc-300 sm:text-base">
+                      {d.text}
+                    </p>
+                    <span className="mt-5 inline-flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-accent-400 uppercase">
+                      Подробнее
+                      <span className="h-px w-8 bg-accent-500 transition-all duration-300 group-hover:w-14" />
+                    </span>
                   </div>
-                </Link>
-              </Reveal>
+                </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -175,21 +296,19 @@ export function Home() {
       <section className="border-y border-white/8 bg-graphite-900/40 py-20 sm:py-28">
         <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
           <Reveal>
-            <p className="text-xs font-semibold tracking-[0.28em] text-zinc-500 uppercase">
+            <p className="text-xs font-semibold tracking-[0.3em] text-zinc-500 uppercase">
               Схема работы
             </p>
-            <h2 className="font-display mt-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Как проходит поставка
-            </h2>
           </Reveal>
+          <SplitHeading className="font-display mt-4 text-3xl font-bold tracking-tight text-white sm:text-5xl">
+            Как проходит поставка
+          </SplitHeading>
 
-          <div className="mt-12 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-14 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
             {workflow.map((w, i) => (
               <Reveal key={w.step} delay={i * 90}>
-                <div className="border-t border-white/15 pt-5">
-                  <span className="font-display text-sm font-semibold text-accent-400">
-                    {w.step}
-                  </span>
+                <div className="group border-t border-white/15 pt-5 transition-colors duration-500 hover:border-accent-500">
+                  <span className="font-display text-sm font-semibold text-accent-400">{w.step}</span>
                   <h3 className="font-display mt-3 text-lg font-semibold text-white">{w.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-zinc-400">{w.text}</p>
                 </div>
@@ -198,7 +317,7 @@ export function Home() {
           </div>
 
           <Reveal delay={200}>
-            <p className="mt-12 max-w-xl text-sm leading-relaxed text-zinc-500">
+            <p className="mt-14 max-w-xl text-sm leading-relaxed text-zinc-500">
               Все этапы — от закупки до поставки клиенту — под контролем одной компании.
               Условия и объёмы согласовываются с менеджером:{' '}
               <a
@@ -212,65 +331,85 @@ export function Home() {
         </div>
       </section>
 
-      {/* ===== НОВОСТИ ===== */}
+      {/* ===== НОВОСТИ: editorial-медиацентр ===== */}
       <section className="py-20 sm:py-28">
         <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
-          <Reveal>
-            <p className="text-xs font-semibold tracking-[0.28em] text-zinc-500 uppercase">
-              Информационный центр
-            </p>
-            <h2 className="font-display mt-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Новости и обновления
-            </h2>
-          </Reveal>
-
-          <Reveal delay={100}>
-            <div className="mt-8 flex flex-wrap gap-2">
-              {(['Все', ...newsCategories] as Filter[]).map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setFilter(cat)}
-                  className={`border px-4 py-2 text-sm font-medium transition-colors duration-300 ${
-                    filter === cat
-                      ? 'border-accent-500 bg-accent-500 text-graphite-950'
-                      : 'border-white/15 text-zinc-400 hover:border-white/40 hover:text-white'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </Reveal>
-
-          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((item, i) => (
-              <Reveal key={item.id} delay={Math.min(i, 5) * 70} className="h-full">
-                <NewsCard item={item} />
+          <div className="flex items-end justify-between gap-6">
+            <div>
+              <Reveal>
+                <p className="text-xs font-semibold tracking-[0.3em] text-zinc-500 uppercase">
+                  Информационный центр
+                </p>
               </Reveal>
-            ))}
+              <SplitHeading className="font-display mt-4 text-3xl font-bold tracking-tight text-white sm:text-5xl">
+                Новости
+              </SplitHeading>
+            </div>
+            <Reveal>
+              <span className="hidden items-center gap-2 text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase sm:flex">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-500" />
+                Обновляется
+              </span>
+            </Reveal>
           </div>
 
-          {filtered.length === 0 && (
-            <p className="mt-10 text-zinc-500">В этой категории пока нет новостей.</p>
-          )}
+          <div className="mt-12 grid gap-12 lg:grid-cols-[1.45fr_1fr] lg:gap-16">
+            {/* главная новость */}
+            <Reveal>
+              <article className="group">
+                <div className="flex items-baseline gap-4 border-t-2 border-accent-500 pt-5">
+                  <span className="text-[11px] font-semibold tracking-[0.22em] text-accent-400 uppercase">
+                    {featured.category}
+                  </span>
+                  <span className="text-xs text-zinc-500">{formatDate(featured.date)}</span>
+                </div>
+                <h3 className="font-display mt-5 text-2xl leading-[1.12] font-bold text-white sm:text-4xl">
+                  {featured.title}
+                </h3>
+                <p className="mt-5 max-w-xl text-base leading-relaxed text-zinc-400">
+                  {featured.description}
+                </p>
+              </article>
+            </Reveal>
+
+            {/* лента второстепенных */}
+            <div>
+              {rest.map((item, i) => (
+                <Reveal key={item.id} delay={i * 80}>
+                  <article className="group border-t border-white/10 py-5 first:border-t-0 first:pt-0">
+                    <div className="flex items-baseline justify-between gap-4">
+                      <span className="text-[10px] font-semibold tracking-[0.22em] text-zinc-500 uppercase">
+                        {item.category}
+                      </span>
+                      <span className="text-xs whitespace-nowrap text-zinc-600">
+                        {formatDate(item.date)}
+                      </span>
+                    </div>
+                    <h4 className="font-display mt-2.5 text-base leading-snug font-semibold text-zinc-200 transition-colors duration-300 group-hover:text-accent-400">
+                      {item.title}
+                    </h4>
+                  </article>
+                </Reveal>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
       {/* ===== КОНТАКТ-CTA ===== */}
-      <section className="border-t border-white/8 py-20 sm:py-24">
+      <section className="border-t border-white/8 py-24 sm:py-32">
         <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
-          <Reveal>
-            <div className="flex flex-col items-start gap-8 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="font-display text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                  Обсудим поставку?
-                </h2>
-                <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-400 sm:text-base">
-                  Прямой контакт с менеджером — без форм и посредников.
-                </p>
-              </div>
-              <ContactButtons size="lg" />
+          <SplitHeading className="font-display max-w-4xl text-4xl leading-[1.02] font-bold tracking-tight text-white sm:text-6xl">
+            Обсудим поставку?
+          </SplitHeading>
+          <Reveal delay={120}>
+            <p className="mt-5 max-w-md text-sm leading-relaxed text-zinc-400 sm:text-base">
+              Прямой контакт с менеджером — без форм и посредников.
+            </p>
+          </Reveal>
+          <Reveal delay={200}>
+            <div className="mt-10">
+              <ContactButtons size="lg" magnetic />
             </div>
           </Reveal>
         </div>

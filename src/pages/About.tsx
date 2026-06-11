@@ -1,8 +1,14 @@
+import { useRef } from 'react'
 import { FileCheck, Handshake, ShieldCheck } from 'lucide-react'
+import { useGSAP } from '@gsap/react'
+import { gsap, prefersReducedMotion } from '../lib/gsap'
 import { company } from '../data/contacts'
 import { assets } from '../config/assets'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Reveal } from '../components/ui/Reveal'
+import { SplitHeading } from '../components/motion/SplitHeading'
+import { Counter } from '../components/motion/Counter'
+import { Tilt } from '../components/motion/Tilt'
 
 const timeline = [
   {
@@ -52,78 +58,99 @@ const trust = [
   },
 ]
 
+const years = new Date().getFullYear() - company.sinceYear
+
 export function About() {
-  const years = new Date().getFullYear() - company.sinceYear
+  const rail = useRef<HTMLDivElement>(null)
+
+  /* рельса таймлайна прорисовывается по мере скролла */
+  useGSAP(
+    () => {
+      if (prefersReducedMotion()) return
+      gsap.fromTo(
+        '[data-rail]',
+        { scaleY: 0 },
+        {
+          scaleY: 1,
+          transformOrigin: 'top center',
+          ease: 'none',
+          scrollTrigger: {
+            trigger: rail.current,
+            start: 'top 75%',
+            end: 'bottom 60%',
+            scrub: true,
+          },
+        },
+      )
+    },
+    { scope: rail },
+  )
 
   return (
     <>
       <PageHeader
         image={assets.about}
         kicker="О компании"
-        title="Надёжный партнёр в топливе и энергоресурсах"
-        subtitle={`${company.name} работает в сфере реализации топлива и энергетических ресурсов с ${company.sinceYear} года.`}
+        title="Масштаб, который работает на вас"
+        subtitle={`${company.name} — оптовые поставки СУГ и нефтепродуктов, собственные АЗС и транспорт. На рынке с ${company.sinceYear} года.`}
       />
 
-      {/* визитка + ключевые цифры */}
-      <section className="mx-auto mt-16 w-full max-w-7xl px-5 sm:mt-20 sm:px-8">
-        <div className="grid gap-5 lg:grid-cols-3">
-          <Reveal className="lg:col-span-2">
-            <div className="h-full border border-white/10 bg-graphite-900/60 p-7 sm:p-9">
-              <h2 className="font-display text-xl font-bold tracking-tight text-white sm:text-2xl">
-                {company.name}
-              </h2>
-              <p className="mt-1 text-sm text-zinc-500">ИНН {company.inn}</p>
-              <p className="mt-6 max-w-2xl text-sm leading-relaxed text-zinc-400 sm:text-base">
-                Мы выстраиваем долгосрочные отношения с клиентами и партнёрами,
-                обеспечивая стабильность поставок и прозрачные условия
-                сотрудничества. Энергия, движение и надёжность — основа каждого
-                направления нашей работы.
-              </p>
-            </div>
-          </Reveal>
+      {/* ===== STORYTELLING: большое утверждение + цифры ===== */}
+      <section className="mx-auto mt-20 w-full max-w-7xl px-5 sm:mt-28 sm:px-8">
+        <SplitHeading className="font-display max-w-4xl text-3xl leading-[1.12] font-bold tracking-tight text-white sm:text-5xl">
+          Мы выстраиваем долгосрочные отношения, обеспечивая стабильность поставок
+          и прозрачные условия сотрудничества.
+        </SplitHeading>
 
-          <div className="grid gap-5">
-            <Reveal delay={100}>
-              <div className="border border-white/10 bg-graphite-900/60 p-6 sm:p-7">
-                <div className="font-display text-4xl font-bold text-white sm:text-5xl">
-                  {years}+
-                </div>
-                <p className="mt-2 text-sm font-semibold text-white sm:text-base">лет на рынке</p>
-                <p className="mt-1 text-xs text-zinc-500">Работаем с {company.sinceYear} года</p>
-              </div>
-            </Reveal>
-            <Reveal delay={180}>
-              <div className="border border-white/10 bg-graphite-900/60 p-6 sm:p-7">
-                <div className="font-display text-4xl font-bold text-white sm:text-5xl">4</div>
-                <p className="mt-2 text-sm font-semibold text-white sm:text-base">
-                  направления деятельности
-                </p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  От оптовых поставок до розничной реализации топлива
-                </p>
-              </div>
-            </Reveal>
+        <div className="mt-16 grid grid-cols-2 gap-y-10 border-t border-white/10 pt-10 lg:grid-cols-4">
+          <div>
+            <div className="font-display text-5xl font-bold text-white sm:text-6xl">
+              <Counter value={years} suffix="+" />
+            </div>
+            <p className="mt-2 text-sm text-zinc-400">лет на рынке</p>
+          </div>
+          <div className="lg:border-l lg:border-white/10 lg:pl-8">
+            <div className="font-display text-5xl font-bold text-white sm:text-6xl">
+              <Counter value={4} />
+            </div>
+            <p className="mt-2 text-sm text-zinc-400">направления деятельности</p>
+          </div>
+          <div className="lg:border-l lg:border-white/10 lg:pl-8">
+            <div className="font-display text-5xl font-bold text-white sm:text-6xl">
+              <Counter value={2} />
+            </div>
+            <p className="mt-2 text-sm text-zinc-400">собственные АЗС</p>
+          </div>
+          <div className="lg:border-l lg:border-white/10 lg:pl-8">
+            <div className="font-display text-5xl font-bold text-white sm:text-6xl">
+              <Counter value={100} suffix="%" />
+            </div>
+            <p className="mt-2 text-sm text-zinc-400">прямой контакт с менеджером</p>
           </div>
         </div>
+
+        <Reveal delay={150}>
+          <p className="mt-8 text-xs text-zinc-600">
+            {company.name} · ИНН {company.inn}
+          </p>
+        </Reveal>
       </section>
 
-      {/* timeline развития */}
-      <section className="mx-auto mt-20 w-full max-w-7xl px-5 sm:mt-24 sm:px-8">
+      {/* ===== TIMELINE: прорисовка рельсы при скролле ===== */}
+      <section className="mx-auto mt-24 w-full max-w-7xl px-5 sm:mt-32 sm:px-8">
         <Reveal>
-          <p className="text-xs font-semibold tracking-[0.28em] text-zinc-500 uppercase">
-            История
-          </p>
-          <h2 className="font-display mt-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Путь компании
-          </h2>
+          <p className="text-xs font-semibold tracking-[0.3em] text-zinc-500 uppercase">История</p>
         </Reveal>
+        <SplitHeading className="font-display mt-4 text-3xl font-bold tracking-tight text-white sm:text-5xl">
+          Путь компании
+        </SplitHeading>
 
-        <div className="relative mt-12 ml-2 sm:ml-4">
-          {/* рельса */}
-          <div className="absolute top-2 bottom-2 left-[5px] w-px bg-white/15" />
-          <div className="space-y-10">
+        <div ref={rail} className="relative mt-14 ml-2 sm:ml-4">
+          <div className="absolute top-2 bottom-2 left-[5px] w-px bg-white/10" />
+          <div data-rail className="absolute top-2 bottom-2 left-[5px] w-px bg-accent-500" />
+          <div className="space-y-12">
             {timeline.map((t, i) => (
-              <Reveal key={t.title} delay={i * 90}>
+              <Reveal key={t.title} delay={i * 80}>
                 <div className="relative pl-10 sm:pl-12">
                   <span
                     className={`absolute top-1.5 left-0 h-[11px] w-[11px] rounded-full ${
@@ -137,7 +164,7 @@ export function About() {
                   >
                     {t.label}
                   </span>
-                  <h3 className="font-display mt-2 text-lg font-semibold text-white sm:text-xl">
+                  <h3 className="font-display mt-2 text-lg font-semibold text-white sm:text-2xl">
                     {t.title}
                   </h3>
                   <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-zinc-400">{t.text}</p>
@@ -149,17 +176,19 @@ export function About() {
       </section>
 
       {/* блок доверия */}
-      <section className="mx-auto mt-20 w-full max-w-7xl px-5 sm:mt-24 sm:px-8">
+      <section className="mx-auto mt-24 w-full max-w-7xl px-5 sm:mt-32 sm:px-8">
         <div className="grid gap-5 md:grid-cols-3">
           {trust.map((t, i) => (
             <Reveal key={t.title} delay={i * 100} className="h-full">
-              <div className="h-full border border-white/10 bg-graphite-900/60 p-7">
-                <t.icon className="h-6 w-6 text-accent-400" />
-                <h3 className="font-display mt-4 text-base font-semibold text-white sm:text-lg">
-                  {t.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-400">{t.text}</p>
-              </div>
+              <Tilt className="h-full">
+                <div className="group h-full border border-white/10 bg-graphite-900/60 p-7 transition-colors duration-500 hover:border-white/25">
+                  <t.icon className="h-6 w-6 text-accent-400 transition-transform duration-500 group-hover:scale-110" />
+                  <h3 className="font-display mt-4 text-base font-semibold text-white sm:text-lg">
+                    {t.title}
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-400">{t.text}</p>
+                </div>
+              </Tilt>
             </Reveal>
           ))}
         </div>

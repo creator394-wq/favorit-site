@@ -15,12 +15,12 @@
 
 ## Текущие временные placeholder-ы
 
-Временные изображения подобраны под канон GOLDEN STEEL (сумерки, янтарный
-свет, силуэты индустрии) из Wikimedia Commons. Подлежат замене финальными
-ассетами Wave 1. Источники (для атрибуции):
+Временные изображения подобраны под канон GOLDEN STEEL и транспортный канон
+(MAN ночью, остров света АЗС, ночной терминал). Подлежат замене финальными
+AI-ассетами Wave 1 (A01/B01/C01/D01/E01). Источники:
 
-- `hero.jpg` — “Oil refinery in the sunset” (U.S. National Archives, public domain) — https://commons.wikimedia.org/wiki/File:OIL_REFINERY_IN_THE_SUNSET_-_NARA_-_546384.jpg
-- `wholesale.jpg` — “Blue hour fog over Preemraff oil refinery by Brofjorden” (W.carter) — https://commons.wikimedia.org/wiki/File:Blue_hour_fog_over_Preemraff_oil_refinery_by_Brofjorden.jpg
-- `stations.jpg` — “Truck fueling, GO Gas Station at Highway 40 during sunset” — https://commons.wikimedia.org/wiki/File:Truck_fueling,_GO_Gas_Station_at_Highway_40_during_sunset.jpg
-- `transport.jpg` — “M50 At Night” — https://commons.wikimedia.org/wiki/File:M50-At-Night.jpeg
-- `about.jpg` — “Preemraff at sunset as seen from Norrkila 1” (W.carter) — https://commons.wikimedia.org/wiki/File:Preemraff_at_sunset_as_seen_from_Norrkila_1.jpg
+- `hero.jpg` — MAN с полуприцепом ночью, фары (Pexels #11053640, Sergei Skrynnik, Pexels License) — https://www.pexels.com/photo/photo-of-a-white-truck-with-lights-11053640/
+- `wholesale.jpg` — “Blue hour fog over Preemraff oil refinery” (W.carter, Wikimedia Commons) — https://commons.wikimedia.org/wiki/File:Blue_hour_fog_over_Preemraff_oil_refinery_by_Brofjorden.jpg
+- `stations.jpg` — минималистичный навес АЗС ночью (Pexels #92077, Markus Spiske, Pexels License) — https://www.pexels.com/photo/gasoline-station-during-night-time-92077/
+- `transport.jpg` — тот же MAN ночью, плотный кроп по кабине (Pexels #11053640)
+- `about.jpg` — ночная аэропанорама НПЗ (Pexels #10407689, Tom Fisk, Pexels License) — https://www.pexels.com/photo/oil-refinery-at-night-10407689/

@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 /*
- * FAVORIT V4 — дизайн-система GOLDEN STEEL.
- * Принципы: графит + один тёплый акцент, реальная фотография вместо
- * иллюстраций, воздух, тонкие линии, сдержанное движение.
- * Запрещено: неон, glow, стекло, декоративные сетки и HUD.
+ * FAVORIT V5 — GOLDEN STEEL × cinematic motion.
+ * Графит + один тёплый акцент, реальная фотография, живой скролл
+ * (Lenis + GSAP ScrollTrigger), построчные reveal, параллакс.
+ * Запрещено: неон, glow-кричалки, SVG-техника, HUD.
  */
 
 @theme {
@@ -23,10 +23,24 @@
 
   --font-display: "Inter Tight", system-ui, sans-serif;
   --font-sans: "Inter", system-ui, sans-serif;
-}
 
-html {
-  scroll-behavior: smooth;
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-100%);
+    }
+  }
+
+  @keyframes scroll-hint {
+    0% {
+      transform: translateY(-100%);
+    }
+    100% {
+      transform: translateY(420%);
+    }
+  }
 }
 
 body {
@@ -35,6 +49,41 @@ body {
 
 ::selection {
   @apply bg-accent-500/25 text-white;
+}
+
+/* ---------- focus: убираем системную рамку, оставляем доступность ---------- */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 1px solid var(--color-accent-500);
+  outline-offset: 4px;
+}
+
+/* ---------- Lenis (рекомендованные стили) ---------- */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+/* ---------- киноплёнка: едва заметное зерно поверх всего ---------- */
+.film-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 240px 240px;
 }
 
 /* появление пунктов полноэкранного меню */
@@ -55,11 +104,11 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
   .menu-item-in {
     animation: none;
     opacity: 1;
+  }
+  .film-grain {
+    display: none;
   }
 }

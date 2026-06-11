@@ -5,6 +5,8 @@ import { NewsCard } from '../components/NewsCard'
 import { ContactButtons } from '../components/ui/ContactButtons'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Reveal } from '../components/ui/Reveal'
+import { SplitHeading } from '../components/motion/SplitHeading'
+import { Tilt } from '../components/motion/Tilt'
 
 const blocks = [
   {
@@ -56,15 +58,17 @@ export function Wholesale() {
         <div className="grid gap-5 sm:grid-cols-2">
           {blocks.map((block, i) => (
             <Reveal key={block.title} delay={i * 90} className="h-full">
-              <div className="h-full border border-white/10 bg-graphite-900/60 p-7 sm:p-8">
-                <block.icon className="h-7 w-7 text-accent-400" />
+              <Tilt className="h-full">
+                <div className="group h-full border border-white/10 bg-graphite-900/60 p-7 transition-colors duration-500 hover:border-white/25 sm:p-8">
+                  <block.icon className="h-7 w-7 text-accent-400 transition-transform duration-500 group-hover:scale-110" />
                 <h2 className="font-display mt-5 text-lg font-semibold text-white sm:text-xl">
                   {block.title}
                 </h2>
                 <p className="mt-2.5 text-sm leading-relaxed text-zinc-400 sm:text-base">
                   {block.text}
                 </p>
-              </div>
+                </div>
+              </Tilt>
             </Reveal>
           ))}
         </div>
@@ -77,10 +81,10 @@ export function Wholesale() {
             <p className="text-xs font-semibold tracking-[0.28em] text-zinc-500 uppercase">
               Процесс
             </p>
-            <h2 className="font-display mt-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Как проходит поставка
-            </h2>
           </Reveal>
+          <SplitHeading className="font-display mt-4 text-3xl font-bold tracking-tight text-white sm:text-5xl">
+            Как проходит поставка
+          </SplitHeading>
 
           <div className="mt-12 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-5">
             {pipeline.map((p, i) => (

@@ -1,12 +1,48 @@
+import { useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Mail, MessageCircle, Phone, Send } from 'lucide-react'
+import { useGSAP } from '@gsap/react'
+import { gsap, prefersReducedMotion } from '../../lib/gsap'
 import { company, contacts } from '../../data/contacts'
 import { navItems } from '../../config/nav'
 import { Logo } from './Navbar'
 
 export function Footer() {
+  const root = useRef<HTMLElement>(null)
+
+  /* wordmark «выплывает» из-под нижней кромки при подходе к футеру */
+  useGSAP(
+    () => {
+      if (prefersReducedMotion()) return
+      gsap.fromTo(
+        '[data-wordmark]',
+        { yPercent: 36 },
+        {
+          yPercent: 0,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: root.current,
+            start: 'top bottom',
+            end: 'top 45%',
+            scrub: true,
+          },
+        },
+      )
+    },
+    { scope: root },
+  )
+
   return (
-    <footer className="mt-28 border-t border-white/10 bg-graphite-900/50">
+    <footer ref={root} className="mt-28 overflow-hidden border-t border-white/10 bg-graphite-900/50">
+      {/* типографический аккорд */}
+      <div
+        data-wordmark
+        aria-hidden="true"
+        className="font-display pointer-events-none -mb-[0.21em] text-center text-[19vw] leading-none font-bold tracking-tight whitespace-nowrap text-white/[0.04] select-none will-change-transform"
+      >
+        ФАВОРИТ
+      </div>
+      <div className="border-t border-white/8" />
       <div className="mx-auto w-full max-w-7xl px-5 pt-16 pb-8 sm:px-8">
         <div className="grid gap-12 lg:grid-cols-[1.3fr_1fr_1fr]">
           <div>

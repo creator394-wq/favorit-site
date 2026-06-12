@@ -10,12 +10,10 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
+import { FUEL_KEYS as FUEL_FLAGS, PRICE_RE } from './lib/validate.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PRICES_PATH = resolve(__dirname, '..', 'src', 'data', 'prices.json')
-
-const FUEL_FLAGS = ['ai92', 'ai95', 'dt', 'gas']
-const PRICE_RE = /^\d+(\.\d{1,2})?$/ // целое или с 1–2 знаками после точки, напр. 59.90
 
 function fail(message) {
   console.error(`\n❌ Ошибка: ${message}`)

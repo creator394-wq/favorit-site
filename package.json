@@ -8,12 +8,14 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "prices:update": "node scripts/update-prices.mjs"
+    "prices:update": "node scripts/update-prices.mjs",
+    "bot": "node --env-file=.env bot/index.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
     "@tailwindcss/vite": "^4.3.0",
     "framer-motion": "^12.40.0",
+    "grammy": "^1.43.0",
     "gsap": "^3.15.0",
     "lenis": "^1.3.23",
     "lucide-react": "^1.17.0",

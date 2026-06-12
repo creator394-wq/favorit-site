@@ -29,3 +29,4 @@ ruvector.db
 *.sw?
 .vercel
 .env*
+!.env.example

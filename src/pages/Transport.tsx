@@ -19,7 +19,7 @@ export function Transport() {
   return (
     <>
       <PageHeader
-        image={assets.transport}
+        image={assets.transportHero}
         kicker="Транспорт"
         title="Собственный парк"
         subtitle="Перевозим то, что продаём: собственная сцепка под СУГ — гарантия контроля поставки на каждом километре."
@@ -38,8 +38,8 @@ export function Transport() {
 
         <div className="mt-12 grid gap-10 lg:grid-cols-[1.4fr_1fr] lg:items-center">
           <ParallaxImage
-            src={assets.transport.src}
-            alt={assets.transport.alt}
+            src={assets.transportDetail.src}
+            alt={assets.transportDetail.alt}
             className="aspect-[16/10]"
             depth={10}
           />
@@ -65,36 +65,48 @@ export function Transport() {
         items={['MAN TGX 18.400', 'ППЦТ PRIZMA', 'СУГ · Пропан', 'ДОПОГ', 'Собственный парк']}
       />
 
-      {/* ===== POSTER: ОГНЕОПАСНО (слот P01 — фон заменится финальным кадром) ===== */}
-      <section className="mt-20 border-y border-white/8 bg-graphite-900/40 sm:mt-28">
-        <div className="mx-auto w-full max-w-7xl px-5 py-20 sm:px-8 sm:py-28">
-          <Reveal>
-            <p className="text-xs font-semibold tracking-[0.3em] text-zinc-500 uppercase">
-              Безопасность
-            </p>
-          </Reveal>
-          <Reveal delay={80}>
-            <div className="mt-8 flex items-center gap-5 sm:gap-8" aria-hidden="true">
-              <span className="h-1 flex-1 bg-accent-600/70" />
-              <span className="h-1 w-10 bg-accent-500 sm:w-16" />
-            </div>
-          </Reveal>
-          <SplitHeading className="font-display mt-6 text-[2.4rem] leading-[0.95] font-bold tracking-[0.04em] text-white uppercase sm:text-7xl lg:text-[6.5rem]">
-            Огнеопасно
-          </SplitHeading>
-          <Reveal delay={120}>
-            <div className="mt-6 flex items-center gap-5 sm:gap-8" aria-hidden="true">
-              <span className="h-1 w-10 bg-accent-500 sm:w-16" />
-              <span className="h-1 flex-1 bg-accent-600/70" />
-            </div>
-          </Reveal>
-          <Reveal delay={180}>
-            <p className="mt-10 max-w-xl text-sm leading-relaxed text-zinc-400 sm:text-base">
-              Маркировка на цистерне — не декорация. Парк работает в режиме
-              перевозки опасных грузов: специализированная цистерна под СУГ
-              и требования ДОПОГ на каждом этапе — от налива до слива.
-            </p>
-          </Reveal>
+      {/* ===== POSTER: ОГНЕОПАСНО ===== */}
+      <section className="relative mt-20 overflow-hidden border-y border-white/8 bg-graphite-950 sm:mt-28">
+        <div className="absolute inset-0">
+          <img
+            src={assets.transportSafety.src}
+            alt={assets.transportSafety.alt}
+            className="h-full w-full object-cover object-left md:object-center"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-graphite-950/20 via-graphite-950/50 to-graphite-950/96" />
+          <div className="absolute inset-0 bg-gradient-to-t from-graphite-950 via-transparent to-graphite-950/40" />
+        </div>
+
+        <div className="relative mx-auto w-full max-w-7xl px-5 py-20 sm:px-8 sm:py-28">
+          <div className="md:ml-auto md:max-w-xl lg:max-w-2xl">
+            <Reveal>
+              <p className="text-xs font-semibold tracking-[0.3em] text-zinc-500 uppercase">
+                Безопасность
+              </p>
+            </Reveal>
+            <Reveal delay={80}>
+              <div className="mt-8 flex items-center gap-5 sm:gap-8" aria-hidden="true">
+                <span className="h-1 flex-1 bg-accent-600/70" />
+                <span className="h-1 w-10 bg-accent-500 sm:w-16" />
+              </div>
+            </Reveal>
+            <SplitHeading className="font-display mt-6 text-[2.4rem] leading-[0.95] font-bold tracking-[0.04em] text-white uppercase sm:text-7xl lg:text-[6.5rem]">
+              Огнеопасно
+            </SplitHeading>
+            <Reveal delay={120}>
+              <div className="mt-6 flex items-center gap-5 sm:gap-8" aria-hidden="true">
+                <span className="h-1 w-10 bg-accent-500 sm:w-16" />
+                <span className="h-1 flex-1 bg-accent-600/70" />
+              </div>
+            </Reveal>
+            <Reveal delay={180}>
+              <p className="mt-10 max-w-xl text-sm leading-relaxed text-zinc-300 sm:text-base">
+                Маркировка на цистерне — не декорация. Парк работает в режиме
+                перевозки опасных грузов: специализированная цистерна под СУГ
+                и требования ДОПОГ на каждом этапе — от налива до слива.
+              </p>
+            </Reveal>
+          </div>
         </div>
       </section>
 

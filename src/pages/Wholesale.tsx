@@ -6,6 +6,7 @@ import { ContactButtons } from '../components/ui/ContactButtons'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Reveal } from '../components/ui/Reveal'
 import { SplitHeading } from '../components/motion/SplitHeading'
+import { ParallaxImage } from '../components/motion/ParallaxImage'
 import { Tilt } from '../components/motion/Tilt'
 
 const blocks = [
@@ -61,12 +62,12 @@ export function Wholesale() {
               <Tilt className="h-full">
                 <div className="group h-full border border-white/10 bg-graphite-900/60 p-7 transition-colors duration-500 hover:border-white/25 sm:p-8">
                   <block.icon className="h-7 w-7 text-accent-400 transition-transform duration-500 group-hover:scale-110" />
-                <h2 className="font-display mt-5 text-lg font-semibold text-white sm:text-xl">
-                  {block.title}
-                </h2>
-                <p className="mt-2.5 text-sm leading-relaxed text-zinc-400 sm:text-base">
-                  {block.text}
-                </p>
+                  <h2 className="font-display mt-5 text-lg font-semibold text-white sm:text-xl">
+                    {block.title}
+                  </h2>
+                  <p className="mt-2.5 text-sm leading-relaxed text-zinc-400 sm:text-base">
+                    {block.text}
+                  </p>
                 </div>
               </Tilt>
             </Reveal>
@@ -86,20 +87,28 @@ export function Wholesale() {
             Как проходит поставка
           </SplitHeading>
 
-          <div className="mt-12 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-5">
-            {pipeline.map((p, i) => (
-              <Reveal key={p.step} delay={i * 80}>
-                <div className="border-t border-white/15 pt-5">
-                  <span className="font-display text-sm font-semibold text-accent-400">
-                    {p.step}
-                  </span>
-                  <h3 className="font-display mt-3 text-base font-semibold text-white">
-                    {p.title}
-                  </h3>
-                  <p className="mt-2 text-[13px] leading-relaxed text-zinc-400">{p.text}</p>
-                </div>
-              </Reveal>
-            ))}
+          <div className="mt-12 grid gap-8 lg:grid-cols-[1.2fr_1fr] lg:items-center">
+            <ParallaxImage
+              src={assets.infrastructure.src}
+              alt={assets.infrastructure.alt}
+              className="aspect-[16/10]"
+              depth={8}
+            />
+            <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-1">
+              {pipeline.map((p, i) => (
+                <Reveal key={p.step} delay={i * 80}>
+                  <div className="border-t border-white/15 pt-5">
+                    <span className="font-display text-sm font-semibold text-accent-400">
+                      {p.step}
+                    </span>
+                    <h3 className="font-display mt-3 text-base font-semibold text-white">
+                      {p.title}
+                    </h3>
+                    <p className="mt-2 text-[13px] leading-relaxed text-zinc-400">{p.text}</p>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
           </div>
         </div>
       </section>

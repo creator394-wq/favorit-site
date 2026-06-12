@@ -4,6 +4,7 @@ import { assets } from '../config/assets'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Reveal } from '../components/ui/Reveal'
 import { SplitHeading } from '../components/motion/SplitHeading'
+import { ParallaxImage } from '../components/motion/ParallaxImage'
 
 export function Stations() {
   return (
@@ -14,6 +15,22 @@ export function Stations() {
         title="Наши АЗС"
         subtitle="Собственные автозаправочные станции. Актуальные цены на топливо — на цифровом табло ниже."
       />
+
+      <section className="mx-auto mt-16 w-full max-w-7xl px-5 sm:mt-24 sm:px-8">
+        <Reveal>
+          <p className="text-xs font-semibold tracking-[0.3em] text-zinc-500 uppercase">
+            Фирменная станция
+          </p>
+        </Reveal>
+        <div className="mt-6 overflow-hidden border border-white/10 bg-graphite-900/60">
+          <ParallaxImage
+            src={assets.stationsSecondary.src}
+            alt={assets.stationsSecondary.alt}
+            className="aspect-[16/8]"
+            depth={6}
+          />
+        </div>
+      </section>
 
       {/* ===== PREMIUM DIGITAL PRICE BOARD ===== */}
       <section className="mx-auto mt-16 w-full max-w-7xl px-5 sm:mt-24 sm:px-8">

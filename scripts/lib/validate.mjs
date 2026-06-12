@@ -3,6 +3,9 @@
 
 export const FUEL_KEYS = ['ai92', 'ai95', 'dt', 'gas']
 
+// Идентификаторы АЗС (E5 per-station prices).
+export const STATION_KEYS = ['azs1', 'azs2']
+
 // Целое или с 1–2 знаками после точки, напр. 59.90 / 68.5 / 31
 export const PRICE_RE = /^\d+(\.\d{1,2})?$/
 

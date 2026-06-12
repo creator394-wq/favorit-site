@@ -4,13 +4,13 @@
 // без правки React/UI-кода. Валидирует ввод и при любой ошибке
 // НЕ трогает файл.
 //
-// Пример:
-//   node scripts/update-prices.mjs --ai92 59.90 --ai95 64.90 --dt 68.50 --gas 31.50 --source manual
+// Пример (E5 — per-station):
+//   node scripts/update-prices.mjs --station azs1 --ai92 60.10 --ai95 65.10 --dt 69.10 --gas 32.10 --source manual
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { FUEL_KEYS as FUEL_FLAGS, PRICE_RE } from './lib/validate.mjs'
+import { FUEL_KEYS as FUEL_FLAGS, PRICE_RE, STATION_KEYS } from './lib/validate.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PRICES_PATH = resolve(__dirname, '..', 'src', 'data', 'prices.json')
@@ -19,8 +19,8 @@ function fail(message) {
   console.error(`\n❌ Ошибка: ${message}`)
   console.error(
     '\nИспользование:\n' +
-      '  node scripts/update-prices.mjs --ai92 59.90 --ai95 64.90 --dt 68.50 --gas 31.50 --source manual\n' +
-      '\nЦены — число (допустим формат 59.90). Файл не изменён.',
+      '  node scripts/update-prices.mjs --station azs1 --ai92 60.10 --ai95 65.10 --dt 69.10 --gas 32.10 --source manual\n' +
+      `\n--station обязателен (${STATION_KEYS.join(' | ')}). Цены — число (формат 59.90). Файл не изменён.`,
   )
   process.exit(1)
 }
@@ -46,9 +46,18 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2))
 
 // --- проверка на неизвестные флаги ---
-const allowed = new Set([...FUEL_FLAGS, 'source'])
+const allowed = new Set([...FUEL_FLAGS, 'source', 'station'])
 for (const key of Object.keys(args)) {
   if (!allowed.has(key)) fail(`неизвестный флаг «--${key}»`)
+}
+
+// --- станция обязательна (старый формат без --station падает здесь) ---
+if (!('station' in args)) {
+  fail('не указан --station. Формат изменился (E5): требуется --station azs1|azs2')
+}
+const station = String(args.station).trim()
+if (!STATION_KEYS.includes(station)) {
+  fail(`неизвестная АЗС «--station ${args.station}» (допустимо: ${STATION_KEYS.join(' | ')})`)
 }
 
 // --- собираем и валидируем обновления цен ---
@@ -94,14 +103,16 @@ try {
 } catch (err) {
   fail(`не удалось прочитать/разобрать ${PRICES_PATH}: ${err.message}`)
 }
-if (typeof data !== 'object' || data === null || typeof data.fuel !== 'object') {
-  fail('структура prices.json повреждена (нет объекта fuel)')
+const stationBlock = data?.stations?.[station]
+if (typeof stationBlock !== 'object' || stationBlock === null || typeof stationBlock.fuel !== 'object') {
+  fail(`структура prices.json повреждена (нет stations.${station}.fuel)`)
 }
 
-// --- применяем изменения (только в памяти) ---
+// --- применяем изменения только к выбранной АЗС (в памяти) ---
 for (const [f, value] of Object.entries(fuelUpdates)) {
-  data.fuel[f] = value
+  stationBlock.fuel[f] = value
 }
+// source и updatedAt — глобальные.
 if (source !== undefined) data.source = source
 data.updatedAt = localIso()
 
@@ -112,7 +123,7 @@ try {
   fail(`не удалось записать ${PRICES_PATH}: ${err.message}`)
 }
 
-console.log('✅ prices.json обновлён:')
-for (const f of providedFuel) console.log(`   ${f}: ${data.fuel[f]}`)
+console.log(`✅ prices.json обновлён (${station}):`)
+for (const f of providedFuel) console.log(`   ${f}: ${stationBlock.fuel[f]}`)
 if (source !== undefined) console.log(`   source: ${data.source}`)
 console.log(`   updatedAt: ${data.updatedAt}`)

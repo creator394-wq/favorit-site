@@ -4,7 +4,7 @@
 
 import { Bot, InlineKeyboard } from 'grammy'
 import { config, isAdmin } from './config.mjs'
-import { validateFuel, FUEL_KEYS } from '../scripts/lib/validate.mjs'
+import { validateFuel, FUEL_KEYS, STATION_KEYS } from '../scripts/lib/validate.mjs'
 import { readPrices, runUpdate, runBuild, runDeploy, gitDeploy } from './prices.mjs'
 
 const LABELS = { ai92: 'АИ-92', ai95: 'АИ-95', dt: 'ДТ', gas: 'СУГ' }
@@ -29,8 +29,9 @@ bot.command('start', async (ctx) => {
   await ctx.reply(
     'Бот обновления цен «Фаворит Сервис».\n\n' +
       'Команды:\n' +
-      '/status — текущие цены\n' +
-      '/price ai92=59.90 ai95=64.90 dt=68.50 gas=31.50 — обновить цены\n' +
+      '/status — текущие цены по каждой АЗС\n' +
+      '/price azs1 ai92=60.10 ai95=65.10 dt=69.10 gas=32.10 — обновить цены одной АЗС\n' +
+      `   (АЗС: ${STATION_KEYS.join(' | ')})\n` +
       '/publish — задеплоить сайт (Vercel deploy hook)\n\n' +
       'Любое изменение требует подтверждения кнопкой.',
   )
@@ -40,10 +41,15 @@ bot.command('start', async (ctx) => {
 bot.command('status', async (ctx) => {
   try {
     const p = await readPrices()
-    const lines = FUEL_KEYS.map((k) => `${LABELS[k]}: ${p.fuel?.[k] ?? '—'}`)
+    const blocks = STATION_KEYS.map((sid) => {
+      const st = p.stations?.[sid]
+      const head = `${st?.name ?? sid} (${sid}):`
+      const rows = FUEL_KEYS.map((k) => `  ${LABELS[k]}: ${st?.fuel?.[k] ?? '—'}`)
+      return [head, ...rows].join('\n')
+    })
     await ctx.reply(
-      'Текущие цены:\n' +
-        lines.join('\n') +
+      'Текущие цены:\n\n' +
+        blocks.join('\n\n') +
         `\n\nИсточник: ${p.source ?? '—'}\nОбновлено: ${p.updatedAt ?? '—'}`,
     )
   } catch (err) {
@@ -55,14 +61,29 @@ bot.command('status', async (ctx) => {
 bot.command('price', async (ctx) => {
   const text = (ctx.match ?? '').trim()
   if (!text) {
-    await ctx.reply('Формат: /price ai92=59.90 ai95=64.90 dt=68.50 gas=31.50')
+    await ctx.reply(`Формат: /price <${STATION_KEYS.join('|')}> ai92=60.10 ai95=65.10 dt=69.10 gas=32.10`)
+    return
+  }
+
+  const tokens = text.split(/\s+/)
+  // первый токен — обязательная станция
+  const station = tokens.shift()
+  if (!STATION_KEYS.includes(station)) {
+    await ctx.reply(
+      `Первым укажите АЗС: ${STATION_KEYS.join(' | ')}.\n` +
+        `Пример: /price azs1 ai92=60.10 ai95=65.10 dt=69.10 gas=32.10`,
+    )
+    return
+  }
+  if (tokens.length === 0) {
+    await ctx.reply('Не переданы цены. Пример: ai92=60.10 ai95=65.10 dt=69.10 gas=32.10')
     return
   }
 
   // разбор key=value токенов
   const input = {}
   let source = 'telegram'
-  for (const token of text.split(/\s+/)) {
+  for (const token of tokens) {
     const eq = token.indexOf('=')
     if (eq === -1) {
       await ctx.reply(`Непонятный аргумент «${token}». Ожидается key=value.`)
@@ -95,17 +116,20 @@ bot.command('price', async (ctx) => {
     await ctx.reply(`Не удалось прочитать prices.json: ${err.message}`)
     return
   }
+  const stationBlock = current.stations?.[station]
+  const stationName = stationBlock?.name ?? station
   const preview = Object.keys(cleaned)
-    .map((k) => `${LABELS[k]}: ${current.fuel?.[k] ?? '—'} → ${cleaned[k]}`)
+    .map((k) => `${LABELS[k]}: ${stationBlock?.fuel?.[k] ?? '—'} → ${cleaned[k]}`)
     .join('\n')
 
-  pending.set(ctx.from.id, { type: 'price', cleaned, source })
+  pending.set(ctx.from.id, { type: 'price', station, cleaned, source })
   const kb = new InlineKeyboard()
     .text('✅ Подтвердить', 'price:confirm')
     .text('✖ Отмена', 'price:cancel')
-  await ctx.reply(`Применить изменения?\n\n${preview}\n\nИсточник: ${source}`, {
-    reply_markup: kb,
-  })
+  await ctx.reply(
+    `Применить изменения для ${stationName} (${station})?\n\n${preview}\n\nИсточник: ${source}`,
+    { reply_markup: kb },
+  )
 })
 
 // --- /publish ---
@@ -132,9 +156,9 @@ bot.callbackQuery('price:confirm', async (ctx) => {
   }
   pending.delete(ctx.from.id)
   await ctx.answerCallbackQuery()
-  await ctx.editMessageText('Применяю цены…')
+  await ctx.editMessageText(`Применяю цены (${op.station})…`)
 
-  const upd = await runUpdate(op.cleaned, op.source)
+  const upd = await runUpdate(op.station, op.cleaned, op.source)
   if (!upd.ok) {
     await ctx.reply('❌ Ошибка обновления цен:\n' + (upd.stderr || upd.stdout).slice(-1500))
     return
@@ -185,8 +209,9 @@ bot.callbackQuery('price:confirm', async (ctx) => {
   else deployLine = `FAIL (${deploy.message})`
 
   const p = await readPrices()
+  const stName = p.stations?.[op.station]?.name ?? op.station
   await ctx.reply(
-    '✅ Цены обновлены\n' +
+    `✅ Цены обновлены — ${stName} (${op.station})\n` +
       'Build: PASS\n' +
       'Git push: PASS\n' +
       `Deploy: ${deployLine}\n` +

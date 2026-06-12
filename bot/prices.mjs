@@ -18,12 +18,12 @@ export async function readPrices() {
 }
 
 /**
- * Запустить update-prices.mjs с провалидированными ценами.
- * cleaned — объект вида { ai92:'59.90', ... }; source — строка.
+ * Запустить update-prices.mjs с провалидированными ценами для одной АЗС.
+ * station — 'azs1' | 'azs2'; cleaned — { ai92:'59.90', ... }; source — строка.
  * Возвращает { ok, stdout, stderr }.
  */
-export async function runUpdate(cleaned, source) {
-  const args = [resolve(PROJECT_ROOT, 'scripts', 'update-prices.mjs')]
+export async function runUpdate(station, cleaned, source) {
+  const args = [resolve(PROJECT_ROOT, 'scripts', 'update-prices.mjs'), '--station', station]
   for (const key of FUEL_KEYS) {
     if (key in cleaned) args.push(`--${key}`, cleaned[key])
   }

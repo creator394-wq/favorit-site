@@ -7,17 +7,24 @@ import { ContactButtons } from '../ui/ContactButtons'
 import { Magnetic } from '../motion/Magnetic'
 import { lenis } from '../motion/SmoothScroll'
 
-/** Логотип бренда «Фаворит Сервис»: реальный фирменный знак. */
+/** Логотип бренда «Фаворит Сервис»: брендовый wordmark на тёмном фоне (без белой подложки). */
 export function Logo({ onClick }: { onClick?: () => void }) {
   return (
-    <Link to="/" onClick={onClick} className="flex items-center gap-3">
-      <img
-        src="/assets/logo-favorit-service.png"
-        alt="Фаворит Сервис"
-        className="h-10 w-auto sm:h-12"
-      />
+    <Link to="/" onClick={onClick} className="group flex items-center gap-3">
+      {/* фирменный знак-овал: жёлтый swoosh с зелёным контуром, без белого фона */}
+      <span
+        aria-hidden="true"
+        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-brand-green-500 bg-graphite-900"
+      >
+        <span className="absolute inset-1 rounded-full border-t-2 border-accent-500" />
+        <span className="font-display text-lg font-bold text-accent-400">Ф</span>
+      </span>
       <span className="leading-none">
-        <span className="block text-[10px] font-medium tracking-[0.28em] text-zinc-500 uppercase">
+        <span className="font-display block text-lg font-bold tracking-[0.06em] text-accent-400 sm:text-xl">
+          Фаворит
+          <span className="ml-1.5 text-white/90">Сервис</span>
+        </span>
+        <span className="mt-1 block text-[10px] font-medium tracking-[0.28em] text-zinc-500 uppercase">
           СУГ · Нефтепродукты · АЗС
         </span>
       </span>

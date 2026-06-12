@@ -20,7 +20,20 @@ export const newsCategories: NewsCategory[] = [
   'Транспорт',
 ]
 
-export const news: NewsItem[] = [
+import dynamicNews from './news.json'
+
+type BotNewsItem = { title?: string; text?: string; createdAt?: string }
+
+// Новости, созданные через Telegram-бота (E12). Подмешиваются в начало ленты.
+const botNews: NewsItem[] = ((dynamicNews.news ?? []) as BotNewsItem[]).map((n, i) => ({
+  id: 1000 + i,
+  title: n.title ?? 'Новость',
+  category: 'Компания',
+  date: (n.createdAt ?? '').slice(0, 10) || '2026-01-01',
+  description: n.text ?? '',
+}))
+
+const staticNews: NewsItem[] = [
   {
     id: 8,
     title: 'Запущен новый корпоративный портал компании',
@@ -86,3 +99,5 @@ export const news: NewsItem[] = [
       'Компания работает в сфере реализации топлива и энергетических ресурсов с 2015 года: опт, АЗС и транспортные услуги.',
   },
 ]
+
+export const news: NewsItem[] = [...botNews, ...staticNews]

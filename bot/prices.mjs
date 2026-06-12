@@ -62,6 +62,35 @@ export async function runBuild() {
 const PRICES_REL = 'src/data/prices.json'
 
 /**
+ * Универсальный коммит+пуш указанных файлов (E12+: новости/акции/контент).
+ * НЕ трогает gitDeploy (ценовой поток). Коммитит ровно переданные пути.
+ * { status:'ok' } | { status:'nochange' } | { status:'fail', step, message }.
+ */
+export async function gitCommitPush(files, message) {
+  const opts = { cwd: PROJECT_ROOT }
+  const list = (Array.isArray(files) ? files : [files]).filter(Boolean)
+  if (!list.length) return { status: 'nochange' }
+  try {
+    const { stdout } = await execFileP('git', ['status', '--porcelain', '--', ...list], opts)
+    if (!stdout.trim()) return { status: 'nochange' }
+  } catch (err) {
+    return { status: 'fail', step: 'status', message: err.message }
+  }
+  try {
+    await execFileP('git', ['add', '--', ...list], opts)
+    await execFileP('git', ['commit', '-m', message], opts)
+  } catch (err) {
+    return { status: 'fail', step: 'commit', message: err.message }
+  }
+  try {
+    await execFileP('git', ['push', 'origin', 'main'], opts)
+  } catch (err) {
+    return { status: 'fail', step: 'push', message: err.message }
+  }
+  return { status: 'ok' }
+}
+
+/**
  * Закоммитить ТОЛЬКО prices.json и запушить в origin/main.
  * git — это git.exe (не .cmd), execFile работает без shell.
  * Возвращает { status, ... }:

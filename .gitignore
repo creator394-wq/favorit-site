@@ -31,5 +31,9 @@ ruvector.db
 .env*
 !.env.example
 .monitor/
-# Runtime-данные заявок: пишутся ботом, не коммитятся (иначе ломают gitDeploy)
+# Runtime/операционные данные бота: не коммитятся (иначе ломают gitDeploy).
+# news.json/promos.json — ТРЕКАЮТСЯ (контент сайта, деплоятся ботом).
 src/data/leads.json
+src/data/reminders.json
+src/data/trucks.json
+src/data/maintenance.json

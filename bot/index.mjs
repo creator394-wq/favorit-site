@@ -5,7 +5,7 @@
 import { Bot, InlineKeyboard, InputFile } from 'grammy'
 import { config, isAdmin } from './config.mjs'
 import { validateFuel, FUEL_KEYS, STATION_KEYS } from '../scripts/lib/validate.mjs'
-import { readPrices, runUpdate, runBuild, runDeploy, gitDeploy } from './prices.mjs'
+import { readPrices, runUpdate, runBuild, runDeploy, gitDeploy, gitCommitPush } from './prices.mjs'
 import {
   checkHealth,
   takeScreenshot,
@@ -15,8 +15,20 @@ import {
   formatTs,
   SITE_URL,
 } from './monitor.mjs'
-import { readLeads, clearLeads, leadStats } from './leads.mjs'
+import {
+  readLeads,
+  clearLeads,
+  leadStats,
+  findLead,
+  setLeadStatus,
+  addLeadNote,
+  exportLeadsCsv,
+  STATUS_LABEL,
+} from './leads.mjs'
 import { startLeadApi } from './leadApi.mjs'
+import { parseWhen, addReminder, listReminders, cancelReminder, popDueReminders } from './reminders.mjs'
+import { news, promos, trucks, maintenance } from './collections.mjs'
+import { prepareContentEdit, writeContacts, CONTACTS_REL } from './content.mjs'
 
 const LABELS = { ai92: 'АИ-92', ai95: 'АИ-95', dt: 'ДТ', gas: 'СУГ' }
 
@@ -36,8 +48,39 @@ function formatRuDate(iso) {
 
 // Ожидающие подтверждения операции по userId (in-memory).
 const pending = new Map()
+// Активные пошаговые сценарии (мастера news/promo/content) по userId.
+const flows = new Map()
 
 const bot = new Bot(config.token)
+
+/**
+ * Общий пайплайн публикации контента: коммит указанных файлов → build → deploy.
+ * НЕ трогает ценовой gitDeploy. Прогресс/итог пишется в чат.
+ */
+async function publishFiles(ctx, files, message) {
+  const git = await gitCommitPush(files, message)
+  if (git.status === 'fail') {
+    await ctx.reply(`❌ Git: FAIL (${git.step})\n${String(git.message).slice(-400)}`)
+    return
+  }
+  if (git.status === 'nochange') {
+    await ctx.reply('⚠️ Нет изменений для коммита.')
+    return
+  }
+  const build = await runBuild()
+  if (!build.ok) {
+    await ctx.reply('❌ Build: FAIL\n' + (build.stderr || build.stdout).slice(-800))
+    return
+  }
+  const deploy = await runDeploy()
+  const dline =
+    deploy.status === 'ok'
+      ? 'PASS'
+      : deploy.status === 'skipped'
+        ? 'SKIPPED (нет deploy hook)'
+        : `FAIL (${deploy.message})`
+  await ctx.reply(`✅ Git push: PASS\nBuild: PASS\nDeploy: ${dline}`)
+}
 
 // --- Глобальный allowlist-гард: чужих молча игнорируем ---
 bot.use(async (ctx, next) => {
@@ -284,10 +327,15 @@ const HELP_TEXT =
   '/quick_price — шпаргалка по формату цен\n' +
   '/restart_info — как перезапустить бота\n\n' +
   'Заявки (CRM):\n' +
-  '/leads — последние 10 заявок\n' +
-  '/lead_last — последняя заявка целиком\n' +
-  '/lead_stats — статистика заявок\n' +
-  '/lead_clear — очистить заявки (с подтверждением)'
+  '/leads — последние 10 · /lead_last · /lead_view <id>\n' +
+  '/lead_work /lead_callback /lead_done /lead_reject <id>\n' +
+  '/lead_note <id> текст · /lead_export · /lead_stats · /lead_clear\n\n' +
+  'Напоминания: /lead_remind <id> <время> · /reminders · /remind_cancel <id>\n\n' +
+  'Контент: /news_create /news_list /news_delete <id>\n' +
+  '/promo_create /promo_list /promo_delete <id> · /content\n\n' +
+  'Транспорт: /trucks /truck_add /truck_edit /truck_delete\n' +
+  'ТО: /maintenance /maintenance_add /maintenance_done <id>\n\n' +
+  'Аналитика: /analytics /report /dashboard'
 
 // --- /help ---
 bot.command('help', async (ctx) => {
@@ -378,7 +426,19 @@ bot.command('restart_info', async (ctx) => {
   )
 })
 
-// ===== E8 — Lead Manager (мини-CRM) =====
+// ===== E9 — Lead CRM =====
+const sid = (id) => String(id).slice(0, 8)
+const leadCard = (l) =>
+  `📋 Заявка ${sid(l.id)}\n\n` +
+  `Имя:\n${l.name}\n\n` +
+  `Телефон:\n${l.phone}\n\n` +
+  `Комментарий:\n${l.message || '—'}\n\n` +
+  `Статус: ${STATUS_LABEL[l.status] ?? l.status}\n` +
+  `Источник: ${l.source}\n` +
+  `Создана: ${formatRu(l.createdAt)}\n` +
+  (l.notes?.length
+    ? '\nЗаметки:\n' + l.notes.map((n) => `• ${formatRuDate(n.at)}: ${n.text}`).join('\n')
+    : '')
 
 // --- /leads (последние 10) ---
 bot.command('leads', async (ctx) => {
@@ -388,33 +448,21 @@ bot.command('leads', async (ctx) => {
       await ctx.reply('📋 Заявок пока нет.')
       return
     }
-    const last10 = leads.slice(-10).reverse()
-    const text = last10
-      .map((l, i) => `#${leads.length - i}\n${l.name}\n${l.phone}\n${formatRuDate(l.createdAt)}`)
+    const text = leads
+      .slice(-10)
+      .reverse()
+      .map(
+        (l) =>
+          `${sid(l.id)} · ${STATUS_LABEL[l.status] ?? l.status}\n${l.name} · ${l.phone}\n${formatRuDate(l.createdAt)}`,
+      )
       .join('\n\n')
-    await ctx.reply('📋 Последние заявки\n\n' + text)
+    await ctx.reply('📋 Последние заявки\n(id для команд — слева)\n\n' + text)
   } catch (err) {
     await ctx.reply(`❌ /leads недоступен\nОшибка: ${err.message}`)
   }
 })
 
-// --- /lead_stats ---
-bot.command('lead_stats', async (ctx) => {
-  try {
-    const s = await leadStats()
-    await ctx.reply(
-      '📈 Статистика заявок\n\n' +
-        `Всего заявок: ${s.total}\n` +
-        `Сегодня: ${s.today}\n` +
-        `За 7 дней: ${s.week}\n` +
-        `Последняя заявка: ${s.last ? formatRu(s.last.createdAt) : '—'}`,
-    )
-  } catch (err) {
-    await ctx.reply(`❌ /lead_stats недоступен\nОшибка: ${err.message}`)
-  }
-})
-
-// --- /lead_last (последняя заявка полностью) ---
+// --- /lead_last ---
 bot.command('lead_last', async (ctx) => {
   try {
     const { leads } = await readLeads()
@@ -423,26 +471,458 @@ bot.command('lead_last', async (ctx) => {
       await ctx.reply('Заявок пока нет.')
       return
     }
-    await ctx.reply(
-      `📋 Последняя заявка #${leads.length}\n\n` +
-        `Имя:\n${l.name}\n\n` +
-        `Телефон:\n${l.phone}\n\n` +
-        `Комментарий:\n${l.message || '—'}\n\n` +
-        `Время:\n${formatRu(l.createdAt)}\n\n` +
-        `Источник:\n${l.source}`,
-    )
+    await ctx.reply(leadCard(l))
   } catch (err) {
     await ctx.reply(`❌ /lead_last недоступен\nОшибка: ${err.message}`)
   }
 })
 
-// --- /lead_clear (только через подтверждение) ---
+// --- /lead_view <id> ---
+bot.command('lead_view', async (ctx) => {
+  try {
+    const id = (ctx.match ?? '').trim()
+    if (!id) {
+      await ctx.reply('Формат: /lead_view <id>')
+      return
+    }
+    const l = await findLead(id)
+    if (!l) {
+      await ctx.reply('Заявка не найдена.')
+      return
+    }
+    await ctx.reply(leadCard(l))
+  } catch (err) {
+    await ctx.reply(`❌ /lead_view недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- смена статуса: done/reject/callback/work ---
+function statusCommand(command, status) {
+  bot.command(command, async (ctx) => {
+    try {
+      const id = (ctx.match ?? '').trim()
+      if (!id) {
+        await ctx.reply(`Формат: /${command} <id>`)
+        return
+      }
+      const r = await setLeadStatus(id, status)
+      if (!r.ok) {
+        await ctx.reply(`❌ ${r.error}`)
+        return
+      }
+      await ctx.reply(`✅ Заявка ${sid(r.lead.id)} → ${STATUS_LABEL[status]}`)
+    } catch (err) {
+      await ctx.reply(`❌ /${command} недоступен\nОшибка: ${err.message}`)
+    }
+  })
+}
+statusCommand('lead_done', 'closed')
+statusCommand('lead_reject', 'rejected')
+statusCommand('lead_callback', 'callback')
+statusCommand('lead_work', 'in_progress')
+
+// --- /lead_note <id> текст ---
+bot.command('lead_note', async (ctx) => {
+  try {
+    const raw = (ctx.match ?? '').trim()
+    const sp = raw.indexOf(' ')
+    if (sp === -1) {
+      await ctx.reply('Формат: /lead_note <id> текст заметки')
+      return
+    }
+    const id = raw.slice(0, sp)
+    const note = raw.slice(sp + 1).trim()
+    const r = await addLeadNote(id, note)
+    if (!r.ok) {
+      await ctx.reply(`❌ ${r.error}`)
+      return
+    }
+    await ctx.reply(`✅ Заметка добавлена к ${sid(r.lead.id)}`)
+  } catch (err) {
+    await ctx.reply(`❌ /lead_note недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /lead_export (CSV) ---
+bot.command('lead_export', async (ctx) => {
+  try {
+    const csv = await exportLeadsCsv()
+    await ctx.replyWithDocument(new InputFile(Buffer.from(csv, 'utf8'), 'leads.csv'))
+  } catch (err) {
+    await ctx.reply(`❌ /lead_export недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /lead_clear (подтверждение) ---
 bot.command('lead_clear', async (ctx) => {
   pending.set(ctx.from.id, { type: 'lead_clear' })
   const kb = new InlineKeyboard()
     .text('✅ Очистить', 'lead_clear:confirm')
     .text('❌ Отмена', 'lead_clear:cancel')
   await ctx.reply('Очистить ВСЕ заявки? Действие необратимо.', { reply_markup: kb })
+})
+
+// ===== E10 — Sales Funnel =====
+bot.command('lead_stats', async (ctx) => {
+  try {
+    const s = await leadStats()
+    await ctx.reply(
+      '📈 Воронка заявок\n\n' +
+        `Всего: ${s.total}\n` +
+        `Новые: ${s.byStatus.new}\n` +
+        `В работе: ${s.byStatus.in_progress}\n` +
+        `Перезвонить: ${s.byStatus.callback}\n` +
+        `Закрыто: ${s.byStatus.closed}\n` +
+        `Отказ: ${s.byStatus.rejected}\n\n` +
+        `Сегодня: ${s.today} · за 7 дней: ${s.week}\n` +
+        `Конверсия (закрыто/всего): ${s.conversion}%`,
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /lead_stats недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// ===== E11 — Reminders =====
+bot.command('lead_remind', async (ctx) => {
+  try {
+    const parts = (ctx.match ?? '').trim().split(/\s+/).filter(Boolean)
+    const id = parts.shift()
+    if (!id || !parts.length) {
+      await ctx.reply('Формат: /lead_remind <id> 2026-06-20 14:00 | 2d | 4h | 30m')
+      return
+    }
+    const lead = await findLead(id)
+    if (!lead) {
+      await ctx.reply('Заявка не найдена.')
+      return
+    }
+    const dueAt = parseWhen(parts)
+    if (!dueAt) {
+      await ctx.reply('Не понял время. Примеры: 2026-06-20 14:00 / 2d / 4h / 30m')
+      return
+    }
+    const rem = await addReminder({
+      leadId: lead.id,
+      dueAt,
+      text: `Заявка ${sid(lead.id)} — ${lead.name}, ${lead.phone}`,
+    })
+    await ctx.reply(`⏰ Напоминание ${sid(rem.id)} на ${formatRu(dueAt)}`)
+  } catch (err) {
+    await ctx.reply(`❌ /lead_remind недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+bot.command('reminders', async (ctx) => {
+  try {
+    const list = await listReminders()
+    if (!list.length) {
+      await ctx.reply('Активных напоминаний нет.')
+      return
+    }
+    await ctx.reply(
+      '⏰ Напоминания\n\n' +
+        list.map((r) => `${sid(r.id)} · ${formatRu(r.dueAt)}\n${r.text}`).join('\n\n'),
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /reminders недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+bot.command('remind_cancel', async (ctx) => {
+  try {
+    const id = (ctx.match ?? '').trim()
+    if (!id) {
+      await ctx.reply('Формат: /remind_cancel <id>')
+      return
+    }
+    const ok = await cancelReminder(id)
+    await ctx.reply(ok ? '✅ Напоминание удалено.' : 'Напоминание не найдено.')
+  } catch (err) {
+    await ctx.reply(`❌ /remind_cancel недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// ===== E12 — News Manager =====
+bot.command('news_create', async (ctx) => {
+  flows.set(ctx.from.id, { type: 'news', step: 'title', data: {} })
+  await ctx.reply('📰 Новая новость. Введите заголовок:')
+})
+
+bot.command('news_list', async (ctx) => {
+  try {
+    const items = await news.list()
+    if (!items.length) {
+      await ctx.reply('Новостей (через бота) пока нет.')
+      return
+    }
+    await ctx.reply(
+      '📰 Новости\n\n' +
+        items
+          .slice(-10)
+          .reverse()
+          .map((n) => `${sid(n.id)} · ${formatRuDate(n.createdAt)}\n${n.title}`)
+          .join('\n\n'),
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /news_list недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+bot.command('news_delete', async (ctx) => {
+  try {
+    const id = (ctx.match ?? '').trim()
+    if (!id) {
+      await ctx.reply('Формат: /news_delete <id>')
+      return
+    }
+    const ok = await news.remove(id)
+    if (!ok) {
+      await ctx.reply('Новость не найдена.')
+      return
+    }
+    await ctx.reply('✅ Удалено. Публикую…')
+    await publishFiles(ctx, ['src/data/news.json'], 'chore: delete news')
+  } catch (err) {
+    await ctx.reply(`❌ /news_delete недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// ===== E13 — Promo Manager =====
+bot.command('promo_create', async (ctx) => {
+  flows.set(ctx.from.id, { type: 'promo', step: 'title', data: {} })
+  await ctx.reply('🎟 Новая акция. Введите заголовок:')
+})
+
+bot.command('promo_list', async (ctx) => {
+  try {
+    const items = await promos.list()
+    if (!items.length) {
+      await ctx.reply('Акций пока нет.')
+      return
+    }
+    await ctx.reply(
+      '🎟 Акции\n\n' +
+        items
+          .slice(-10)
+          .reverse()
+          .map((p) => `${sid(p.id)} · ${p.title}\n${p.text || ''}`)
+          .join('\n\n'),
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /promo_list недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+bot.command('promo_delete', async (ctx) => {
+  try {
+    const id = (ctx.match ?? '').trim()
+    if (!id) {
+      await ctx.reply('Формат: /promo_delete <id>')
+      return
+    }
+    const ok = await promos.remove(id)
+    if (!ok) {
+      await ctx.reply('Акция не найдена.')
+      return
+    }
+    await ctx.reply('✅ Удалено. Публикую…')
+    await publishFiles(ctx, ['src/data/promos.json'], 'chore: delete promo')
+  } catch (err) {
+    await ctx.reply(`❌ /promo_delete недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// ===== E18 — Transport Management =====
+bot.command('trucks', async (ctx) => {
+  try {
+    const items = await trucks.list()
+    if (!items.length) {
+      await ctx.reply('🚛 Техника не добавлена. /truck_add <гос.номер> | <модель> | <статус>')
+      return
+    }
+    await ctx.reply(
+      '🚛 Техника\n\n' +
+        items
+          .map((t) => `${sid(t.id)} · ${t.plate}\n${t.model} · ${t.status || '—'}`)
+          .join('\n\n'),
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /trucks недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+bot.command('truck_add', async (ctx) => {
+  try {
+    const parts = (ctx.match ?? '').split('|').map((s) => s.trim())
+    const [plate, model, status] = parts
+    if (!plate || !model) {
+      await ctx.reply('Формат: /truck_add <гос.номер> | <модель> | <статус>')
+      return
+    }
+    const t = await trucks.add({ plate, model, status: status || 'в строю' })
+    await ctx.reply(`✅ Добавлено ${sid(t.id)} · ${t.plate} · ${t.model}`)
+  } catch (err) {
+    await ctx.reply(`❌ /truck_add недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+bot.command('truck_edit', async (ctx) => {
+  try {
+    const parts = (ctx.match ?? '').split('|').map((s) => s.trim())
+    const id = parts.shift()
+    const [plate, model, status] = parts
+    if (!id || (!plate && !model && !status)) {
+      await ctx.reply('Формат: /truck_edit <id> | <гос.номер> | <модель> | <статус>')
+      return
+    }
+    const patch = {}
+    if (plate) patch.plate = plate
+    if (model) patch.model = model
+    if (status) patch.status = status
+    const t = await trucks.update(id, patch)
+    await ctx.reply(t ? `✅ Обновлено ${sid(t.id)}` : 'Техника не найдена.')
+  } catch (err) {
+    await ctx.reply(`❌ /truck_edit недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+bot.command('truck_delete', async (ctx) => {
+  try {
+    const id = (ctx.match ?? '').trim()
+    if (!id) {
+      await ctx.reply('Формат: /truck_delete <id>')
+      return
+    }
+    const ok = await trucks.remove(id)
+    await ctx.reply(ok ? '✅ Удалено.' : 'Техника не найдена.')
+  } catch (err) {
+    await ctx.reply(`❌ /truck_delete недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// ===== E19 — Maintenance =====
+bot.command('maintenance', async (ctx) => {
+  try {
+    const items = await maintenance.list()
+    if (!items.length) {
+      await ctx.reply('🔧 ТО не запланировано. /maintenance_add <техника> | <работы> | <дата>')
+      return
+    }
+    await ctx.reply(
+      '🔧 Техобслуживание\n\n' +
+        items
+          .map(
+            (m) =>
+              `${sid(m.id)} · ${m.done ? '✅ выполнено' : '🔧 в плане'}\n${m.truck} — ${m.work}\nдата: ${m.date || '—'}`,
+          )
+          .join('\n\n'),
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /maintenance недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+bot.command('maintenance_add', async (ctx) => {
+  try {
+    const parts = (ctx.match ?? '').split('|').map((s) => s.trim())
+    const [truck, work, date] = parts
+    if (!truck || !work) {
+      await ctx.reply('Формат: /maintenance_add <техника> | <работы> | <дата>')
+      return
+    }
+    const m = await maintenance.add({ truck, work, date: date || '', done: false })
+    await ctx.reply(`✅ ТО создано ${sid(m.id)} · ${m.truck}`)
+  } catch (err) {
+    await ctx.reply(`❌ /maintenance_add недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+bot.command('maintenance_done', async (ctx) => {
+  try {
+    const id = (ctx.match ?? '').trim()
+    if (!id) {
+      await ctx.reply('Формат: /maintenance_done <id>')
+      return
+    }
+    const m = await maintenance.update(id, { done: true })
+    await ctx.reply(m ? `✅ ТО ${sid(m.id)} закрыто.` : 'ТО не найдено.')
+  } catch (err) {
+    await ctx.reply(`❌ /maintenance_done недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// ===== E14 — Content Manager (NL) =====
+bot.command('content', async (ctx) => {
+  flows.set(ctx.from.id, { type: 'content', step: 'await', data: {} })
+  await ctx.reply(
+    '✏️ Content Manager. Напишите, что изменить:\n' +
+      '• измени телефон на +7 999 000-00-00\n' +
+      '• измени email на mail@example.ru\n' +
+      '• измени whatsapp на https://wa.me/79990000000',
+  )
+})
+
+// ===== E15 — Analytics =====
+bot.command('analytics', async (ctx) => {
+  await ctx.reply(
+    '📊 Аналитика\n\nВеб-аналитика пока не подключена.\n' +
+      'Подключите Vercel Analytics или Яндекс.Метрику, затем добавим показатели ' +
+      '(посетители, страницы, источники) сюда.',
+  )
+})
+
+// ===== E17 — AI Business Analyst (rule-based) =====
+bot.command('report', async (ctx) => {
+  try {
+    const [s, h, p] = await Promise.all([leadStats(), checkHealth(), readPrices().catch(() => ({}))])
+    const problems = []
+    if (!h.ok) problems.push('• сайт недоступен')
+    if (s.byStatus.new > 0) problems.push(`• ${s.byStatus.new} необработанных заявок`)
+    if (s.byStatus.callback > 0) problems.push(`• ${s.byStatus.callback} ждут перезвона`)
+    const recs = []
+    if (s.byStatus.new > 0) recs.push('• обработать новые заявки (/leads, /lead_work)')
+    if (s.conversion < 30 && s.total >= 5) recs.push('• низкая конверсия — проработать отказы')
+    if (!recs.length) recs.push('• всё под контролем')
+    await ctx.reply(
+      '🧠 Бизнес-отчёт\n\n' +
+        `Заявки: всего ${s.total}, сегодня ${s.today}, за 7 дней ${s.week}\n` +
+        `Конверсия: ${s.conversion}%\n` +
+        `Воронка: new ${s.byStatus.new} / work ${s.byStatus.in_progress} / callback ${s.byStatus.callback} / closed ${s.byStatus.closed} / reject ${s.byStatus.rejected}\n` +
+        `Сайт: ${h.ok ? '🟢 online' : '🔴 offline'}\n\n` +
+        'Проблемы:\n' + (problems.length ? problems.join('\n') : '• не выявлено') +
+        '\n\nРекомендации:\n' + recs.join('\n'),
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /report недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// ===== E20 — Executive Dashboard =====
+bot.command('dashboard', async (ctx) => {
+  try {
+    const [h, p, s] = await Promise.all([
+      checkHealth(),
+      readPrices().catch(() => ({})),
+      leadStats(),
+    ])
+    const stLine = (id) => {
+      const st = p.stations?.[id]
+      return FUEL_KEYS.map((k) => `${LABELS[k]} ${st?.fuel?.[k] ?? '—'}`).join(' / ')
+    }
+    await ctx.reply(
+      '🗂 Executive Dashboard\n\n' +
+        `Сайт: ${h.ok ? '🟢 ONLINE' : '🔴 OFFLINE'}\n\n` +
+        `${p.stations?.azs1?.name ?? 'АЗС №1'}:\n${stLine('azs1')}\n\n` +
+        `${p.stations?.azs2?.name ?? 'АЗС №2'}:\n${stLine('azs2')}\n\n` +
+        `Новые заявки: ${s.byStatus.new}\n` +
+        `В работе: ${s.byStatus.in_progress}\n` +
+        `Перезвонить: ${s.byStatus.callback}\n` +
+        `Закрыто: ${s.byStatus.closed}\n\n` +
+        `Цены обновлены: ${formatTs(p.updatedAt)}`,
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /dashboard недоступен\nОшибка: ${err.message}`)
+  }
 })
 
 // --- callbacks ---
@@ -575,10 +1055,181 @@ bot.callbackQuery('lead_clear:confirm', async (ctx) => {
   }
 })
 
+// --- content/news/promo confirm callbacks ---
+bot.callbackQuery(['content:cancel', 'news:cancel', 'promo:cancel'], async (ctx) => {
+  pending.delete(ctx.from.id)
+  flows.delete(ctx.from.id)
+  await ctx.answerCallbackQuery()
+  await ctx.editMessageText('Отменено.')
+})
+
+bot.callbackQuery('content:confirm', async (ctx) => {
+  const op = pending.get(ctx.from.id)
+  if (!op || op.type !== 'content') {
+    await ctx.answerCallbackQuery({ text: 'Нечего подтверждать' })
+    return
+  }
+  pending.delete(ctx.from.id)
+  await ctx.answerCallbackQuery()
+  await ctx.editMessageText('Применяю и публикую…')
+  try {
+    await writeContacts(op.newContent)
+    await publishFiles(ctx, [CONTACTS_REL], 'chore: update site content')
+  } catch (err) {
+    await ctx.reply(`❌ Не удалось применить: ${err.message}`)
+  }
+})
+
+bot.callbackQuery('news:confirm', async (ctx) => {
+  const op = pending.get(ctx.from.id)
+  if (!op || op.type !== 'news') {
+    await ctx.answerCallbackQuery({ text: 'Нечего подтверждать' })
+    return
+  }
+  pending.delete(ctx.from.id)
+  await ctx.answerCallbackQuery()
+  await ctx.editMessageText('Сохраняю и публикую новость…')
+  try {
+    await news.add(op.data)
+    await publishFiles(ctx, ['src/data/news.json'], 'chore: add news')
+  } catch (err) {
+    await ctx.reply(`❌ Не удалось опубликовать: ${err.message}`)
+  }
+})
+
+bot.callbackQuery('promo:confirm', async (ctx) => {
+  const op = pending.get(ctx.from.id)
+  if (!op || op.type !== 'promo') {
+    await ctx.answerCallbackQuery({ text: 'Нечего подтверждать' })
+    return
+  }
+  pending.delete(ctx.from.id)
+  await ctx.answerCallbackQuery()
+  await ctx.editMessageText('Сохраняю и публикую акцию…')
+  try {
+    await promos.add(op.data)
+    await publishFiles(ctx, ['src/data/promos.json'], 'chore: add promo')
+  } catch (err) {
+    await ctx.reply(`❌ Не удалось опубликовать: ${err.message}`)
+  }
+})
+
+// --- пошаговые сценарии (news/promo/content) на обычных текстовых сообщениях ---
+bot.on('message:text', async (ctx) => {
+  const text = ctx.msg.text
+  if (text.startsWith('/')) return // команды обрабатываются своими хендлерами
+  const flow = flows.get(ctx.from.id)
+  if (!flow) return
+  try {
+    if (flow.type === 'content') {
+      flows.delete(ctx.from.id)
+      const prep = await prepareContentEdit(text)
+      if (!prep.ok) {
+        await ctx.reply(`❌ ${prep.error}`)
+        return
+      }
+      pending.set(ctx.from.id, { type: 'content', newContent: prep.newContent })
+      const kb = new InlineKeyboard()
+        .text('✅ Применить', 'content:confirm')
+        .text('❌ Отмена', 'content:cancel')
+      await ctx.reply(`Изменения:\n\n${prep.preview}\n\nПрименить и задеплоить?`, { reply_markup: kb })
+      return
+    }
+
+    if (flow.type === 'news' || flow.type === 'promo') {
+      if (flow.step === 'title') {
+        flow.data.title = text.trim()
+        flow.step = 'text'
+        await ctx.reply('Введите текст:')
+        return
+      }
+      if (flow.step === 'text') {
+        flow.data.text = text.trim()
+        flow.step = 'photo'
+        await ctx.reply('Пришлите ссылку на фото или напишите «нет»:')
+        return
+      }
+      if (flow.step === 'photo') {
+        const ph = text.trim().toLowerCase()
+        flow.data.photo = ph === 'нет' || ph === 'no' ? '' : text.trim()
+        flows.delete(ctx.from.id)
+        pending.set(ctx.from.id, { type: flow.type, data: flow.data })
+        const kb = new InlineKeyboard()
+          .text('✅ Опубликовать', `${flow.type}:confirm`)
+          .text('❌ Отмена', `${flow.type}:cancel`)
+        await ctx.reply(
+          `${flow.type === 'news' ? '📰 Новость' : '🎟 Акция'}:\n\n` +
+            `${flow.data.title}\n\n${flow.data.text}\n\n` +
+            `Фото: ${flow.data.photo || '—'}\n\nОпубликовать (build + push + deploy)?`,
+          { reply_markup: kb },
+        )
+        return
+      }
+    }
+  } catch (err) {
+    flows.delete(ctx.from.id)
+    await ctx.reply(`❌ Ошибка сценария: ${err.message}`)
+  }
+})
+
 bot.catch((err) => {
   // Не логируем токен/чувствительные данные — только сообщение.
   console.error('Bot error:', err.error?.message ?? err.message ?? 'unknown')
 })
+
+// ===== E11/E16 — планировщики (напоминания + ежедневный отчёт 08:00) =====
+async function tickReminders() {
+  try {
+    const due = await popDueReminders()
+    for (const r of due) {
+      for (const id of config.adminIds) {
+        try {
+          await bot.api.sendMessage(id, `⏰ Напоминание\n${r.text}`)
+        } catch {
+          /* пропускаем недоставленные */
+        }
+      }
+    }
+  } catch {
+    /* не валим планировщик */
+  }
+}
+
+let lastDailyReportDay = -1
+async function tickDailyReport() {
+  try {
+    const now = new Date()
+    if (now.getHours() === 8 && now.getDate() !== lastDailyReportDay) {
+      lastDailyReportDay = now.getDate()
+      const [s, h, p, v] = await Promise.all([
+        leadStats(),
+        checkHealth(),
+        readPrices().catch(() => ({})),
+        gitVersion(),
+      ])
+      const text =
+        '📅 Ежедневный отчёт\n\n' +
+        `Заявки: всего ${s.total}, новых ${s.byStatus.new}, сегодня ${s.today}\n` +
+        `Сайт: ${h.ok ? '🟢 online' : '🔴 offline'}\n` +
+        `Последний коммит: ${v.commit ?? '—'}\n` +
+        `Цены АЗС №1: ${FUEL_KEYS.map((k) => `${LABELS[k]} ${p.stations?.azs1?.fuel?.[k] ?? '—'}`).join(' / ')}\n` +
+        `Цены АЗС №2: ${FUEL_KEYS.map((k) => `${LABELS[k]} ${p.stations?.azs2?.fuel?.[k] ?? '—'}`).join(' / ')}\n` +
+        `Цены обновлены: ${formatTs(p.updatedAt)}`
+      for (const id of config.adminIds) {
+        try {
+          await bot.api.sendMessage(id, text)
+        } catch {
+          /* пропускаем */
+        }
+      }
+    }
+  } catch {
+    /* не валим планировщик */
+  }
+}
+
+setInterval(tickReminders, 60_000)
+setInterval(tickDailyReport, 60_000)
 
 // ===== E8 — приём заявок с сайта + мгновенное уведомление админов =====
 async function notifyLead(lead) {

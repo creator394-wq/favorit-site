@@ -6,7 +6,15 @@ import { Bot, InlineKeyboard, InputFile } from 'grammy'
 import { config, isAdmin } from './config.mjs'
 import { validateFuel, FUEL_KEYS, STATION_KEYS } from '../scripts/lib/validate.mjs'
 import { readPrices, runUpdate, runBuild, runDeploy, gitDeploy } from './prices.mjs'
-import { checkHealth, takeScreenshot, gitVersion, formatTs, SITE_URL } from './monitor.mjs'
+import {
+  checkHealth,
+  takeScreenshot,
+  gitVersion,
+  gitStatusInfo,
+  readRecentLogs,
+  formatTs,
+  SITE_URL,
+} from './monitor.mjs'
 
 const LABELS = { ai92: 'АИ-92', ai95: 'АИ-95', dt: 'ДТ', gas: 'СУГ' }
 
@@ -36,7 +44,7 @@ bot.command('start', async (ctx) => {
       '/publish — задеплоить сайт (Vercel deploy hook)\n\n' +
       'Мониторинг:\n' +
       '/health — доступность сайта\n' +
-      '/site-status — цены + состояние сайта\n' +
+      '/site_status — цены + состояние сайта\n' +
       '/screenshot — скриншот главной\n' +
       '/deploy — ручной деплой\n' +
       '/version — git-ветка/коммит + дата цен\n\n' +
@@ -163,29 +171,32 @@ bot.command('health', async (ctx) => {
 })
 
 // --- /site-status ---
-bot.command('site-status', async (ctx) => {
-  let p
+// Telegram-команды матчат только [A-Za-z0-9_], поэтому регистрируем валидные
+// имена site_status/sitestatus + текстовый fallback на /site-status (с дефисом).
+async function siteStatusHandler(ctx) {
   try {
-    p = await readPrices()
+    const p = await readPrices()
+    const blocks = STATION_KEYS.map((sid) => {
+      const st = p.stations?.[sid]
+      const rows = FUEL_KEYS.map((k) => `${LABELS[k]}: ${st?.fuel?.[k] ?? '—'}`)
+      return [`${st?.name ?? sid}`, ...rows].join('\n')
+    })
+    const h = await checkHealth()
+    const siteLine = h.ok ? '🟢 ONLINE' : '🔴 OFFLINE'
+    await ctx.reply(
+      '📊 Статус сайта\n\n' +
+        blocks.join('\n\n') +
+        `\n\nПоследнее обновление:\n${formatTs(p.updatedAt)}` +
+        `\nИсточник: ${p.source ?? '—'}` +
+        `\n\nСайт:\n${siteLine}`,
+    )
   } catch (err) {
-    await ctx.reply(`Не удалось прочитать prices.json: ${err.message}`)
-    return
+    await ctx.reply(`❌ /site-status недоступен\nОшибка: ${err.message}`)
   }
-  const blocks = STATION_KEYS.map((sid) => {
-    const st = p.stations?.[sid]
-    const rows = FUEL_KEYS.map((k) => `${LABELS[k]}: ${st?.fuel?.[k] ?? '—'}`)
-    return [`${st?.name ?? sid}`, ...rows].join('\n')
-  })
-  const h = await checkHealth()
-  const siteLine = h.ok ? '🟢 ONLINE' : '🔴 OFFLINE'
-  await ctx.reply(
-    '📊 Статус сайта\n\n' +
-      blocks.join('\n\n') +
-      `\n\nПоследнее обновление:\n${formatTs(p.updatedAt)}` +
-      `\nИсточник: ${p.source ?? '—'}` +
-      `\n\nСайт:\n${siteLine}`,
-  )
-})
+}
+
+bot.command(['site_status', 'sitestatus'], siteStatusHandler)
+bot.hears(/^\/site-status\b/, siteStatusHandler)
 
 // --- /screenshot ---
 bot.command('screenshot', async (ctx) => {
@@ -204,13 +215,14 @@ bot.command('screenshot', async (ctx) => {
 
 // --- /deploy (ручной, прямой вызов runDeploy) ---
 bot.command('deploy', async (ctx) => {
-  const deploy = await runDeploy()
-  if (deploy.status === 'ok') {
-    await ctx.reply('🚀 Deploy started')
-  } else if (deploy.status === 'skipped') {
-    await ctx.reply('❌ Deploy failed\nVERCEL_DEPLOY_HOOK_URL не задан')
-  } else {
-    await ctx.reply(`❌ Deploy failed\n${deploy.message}`)
+  try {
+    const deploy = await runDeploy()
+    if (deploy.status === 'ok') await ctx.reply('🚀 Deploy: PASS')
+    else if (deploy.status === 'skipped')
+      await ctx.reply('⚠️ Deploy: SKIPPED (VERCEL_DEPLOY_HOOK_URL не задан)')
+    else await ctx.reply(`❌ Deploy: FAIL\n${deploy.message}`)
+  } catch (err) {
+    await ctx.reply(`❌ Deploy: FAIL\n${err.message}`)
   }
 })
 
@@ -232,6 +244,116 @@ bot.command('version', async (ctx) => {
       `Branch: ${v.branch}\n` +
       `Commit: ${v.commit}\n` +
       `Prices updated:\n${formatTs(p.updatedAt)}`,
+  )
+})
+
+// ===== E7 — Site Manager: дополнительные команды =====
+
+const HELP_TEXT =
+  'Команды Site Manager «Фаворит Сервис»:\n\n' +
+  '/start — приветствие\n' +
+  '/help — этот список\n' +
+  '/status — цены (одним списком)\n' +
+  '/price azs1 ai92=… ai95=… dt=… gas=… — цены АЗС №1\n' +
+  '/price azs2 ai92=… ai95=… dt=… gas=… — цены АЗС №2\n' +
+  '/site_status — цены по АЗС + состояние сайта\n' +
+  '/health — доступность сайта\n' +
+  '/screenshot — скриншот главной\n' +
+  '/version — git-ветка/коммит + дата цен\n' +
+  '/deploy — ручной деплой (deploy hook)\n' +
+  '/publish — деплой с подтверждением\n' +
+  '/git_status — состояние git\n' +
+  '/logs — последние логи бота\n' +
+  '/check — быстрая сводная проверка\n' +
+  '/quick_price — шпаргалка по формату цен\n' +
+  '/restart_info — как перезапустить бота'
+
+// --- /help ---
+bot.command('help', async (ctx) => {
+  await ctx.reply(HELP_TEXT)
+})
+
+// --- /git_status ---
+bot.command('git_status', async (ctx) => {
+  try {
+    const g = await gitStatusInfo()
+    if (g.error) {
+      await ctx.reply(`❌ git_status недоступен\nОшибка: ${g.error}`)
+      return
+    }
+    let msg =
+      'Git:\n' +
+      `Branch: ${g.branch}\n` +
+      `Last commit: ${g.lastCommit}\n` +
+      `Status: ${g.clean ? 'clean' : 'dirty'}`
+    if (!g.clean) {
+      const shown = g.files.slice(0, 30)
+      msg += '\n\nИзменённые файлы:\n• ' + shown.join('\n• ')
+      if (g.files.length > shown.length) msg += `\n…ещё ${g.files.length - shown.length}`
+    }
+    await ctx.reply(msg)
+  } catch (err) {
+    await ctx.reply(`❌ git_status недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /logs ---
+bot.command('logs', async (ctx) => {
+  try {
+    const l = await readRecentLogs()
+    if (!l.ok) {
+      await ctx.reply('Логи пока не настроены.')
+      return
+    }
+    await ctx.reply('Последние логи:\n\n' + l.text.slice(-3500))
+  } catch (err) {
+    await ctx.reply(`❌ logs недоступны\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /check (сводная: health + version + prices, без screenshot) ---
+bot.command('check', async (ctx) => {
+  try {
+    const [h, v, p] = await Promise.all([
+      checkHealth(),
+      gitVersion(),
+      readPrices().catch(() => ({})),
+    ])
+    const stLine = (sid) => {
+      const st = p.stations?.[sid]
+      const vals = FUEL_KEYS.map((k) => `${LABELS[k]} ${st?.fuel?.[k] ?? '—'}`).join(' / ')
+      return `${st?.name ?? sid}: ${vals}`
+    }
+    await ctx.reply(
+      (h.ok ? '🟢 Site OK' : '🔴 Site DOWN') +
+        `\nBranch: ${v.branch ?? '—'}` +
+        `\nCommit: ${v.commit ?? '—'}` +
+        `\nPrices updated: ${formatTs(p.updatedAt)}` +
+        `\n${stLine('azs1')}` +
+        `\n${stLine('azs2')}` +
+        `\nHTTP: ${h.ok ? h.status : h.error ?? '—'}` +
+        `\nResponse: ${h.ms != null ? h.ms + ' ms' : '—'}`,
+    )
+  } catch (err) {
+    await ctx.reply(`❌ check недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /quick_price (шпаргалка) ---
+bot.command('quick_price', async (ctx) => {
+  await ctx.reply(
+    'Формат обновления цен:\n\n' +
+      'АЗС №1:\n/price azs1 ai92=60.10 ai95=65.10 dt=69.10 gas=32.10\n\n' +
+      'АЗС №2:\n/price azs2 ai92=61.10 ai95=66.10 dt=70.10 gas=33.10',
+  )
+})
+
+// --- /restart_info ---
+bot.command('restart_info', async (ctx) => {
+  await ctx.reply(
+    'Если бот не отвечает, на Windows открой PowerShell в проекте и выполни:\n\n' +
+      'cd C:\\Users\\Данил\\favorit-site\n' +
+      'npm run bot',
   )
 })
 

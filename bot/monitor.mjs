@@ -2,7 +2,7 @@
 // Не трогает логику цен, gitDeploy и deploy hook.
 
 import { execFile } from 'node:child_process'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -73,4 +73,46 @@ export async function gitVersion() {
   } catch (err) {
     return { error: err.message }
   }
+}
+
+/**
+ * Состояние git: ветка, последний коммит, clean/dirty, список изменённых файлов.
+ * git — git.exe, execFile без shell. { branch, lastCommit, clean, files } | { error }.
+ */
+export async function gitStatusInfo() {
+  try {
+    const opts = { cwd: PROJECT_ROOT }
+    const { stdout: branch } = await execFileP('git', ['rev-parse', '--abbrev-ref', 'HEAD'], opts)
+    const { stdout: last } = await execFileP('git', ['log', '-1', '--pretty=%h %s'], opts)
+    const { stdout: status } = await execFileP('git', ['status', '--porcelain'], opts)
+    const files = status
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => l.slice(3).replace(/^"|"$/g, ''))
+    return { branch: branch.trim(), lastCommit: last.trim(), clean: files.length === 0, files }
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+/**
+ * Последние строки локального лог-файла бота, если он есть.
+ * Ищет в нескольких типовых путях. { ok:true, path, text } | { ok:false }.
+ */
+export async function readRecentLogs(maxLines = 30) {
+  const candidates = [
+    resolve(PROJECT_ROOT, 'bot', 'bot.log'),
+    resolve(PROJECT_ROOT, '.monitor', 'bot.log'),
+    resolve(PROJECT_ROOT, 'logs', 'bot.log'),
+  ]
+  for (const file of candidates) {
+    try {
+      const txt = await readFile(file, 'utf8')
+      const lines = txt.split('\n').filter(Boolean)
+      return { ok: true, path: file, text: lines.slice(-maxLines).join('\n') || '(пусто)' }
+    } catch {
+      // нет файла — пробуем следующий
+    }
+  }
+  return { ok: false }
 }

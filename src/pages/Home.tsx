@@ -15,35 +15,22 @@ import { Counter } from '../components/motion/Counter'
 import { Marquee } from '../components/motion/Marquee'
 import { ParallaxImage } from '../components/motion/ParallaxImage'
 
-const directions = [
-  {
-    to: '/wholesale',
-    image: assets.wholesale,
-    num: '01',
-    title: 'Оптовые поставки',
-    text: 'СУГ и нефтепродукты оптовыми партиями для юридических лиц. Договор, документооборот, прозрачные условия.',
-  },
-  {
-    to: '/stations',
-    image: assets.stations,
-    num: '02',
-    title: 'Автозаправочные станции',
-    text: 'Собственные АЗС с актуальными ценами на топливо. Розница под контролем компании.',
-  },
-  {
-    to: '/transport',
-    image: assets.transport,
-    num: '03',
-    title: 'Транспортные услуги',
-    text: 'Перевозка топлива и СУГ специализированным транспортом по согласованным маршрутам.',
-  },
-]
-
 const workflow = [
-  { step: '01', title: 'Запрос', text: 'Вы описываете задачу: продукт, объём, сроки.' },
-  { step: '02', title: 'Условия', text: 'Фиксируем цену, объём и график поставки.' },
-  { step: '03', title: 'Логистика', text: 'Собственный транспорт под перевозку топлива и СУГ.' },
-  { step: '04', title: 'Поставка', text: 'Доставка в срок и полный пакет документов.' },
+  {
+    step: '01',
+    title: 'Терминал',
+    text: 'Запрос, фиксация цены и объёма, налив партии СУГ на терминале.',
+  },
+  {
+    step: '02',
+    title: 'Цистерна',
+    text: 'Собственная сцепка MAN TGX + ППЦТ PRIZMA везёт груз по согласованному маршруту.',
+  },
+  {
+    step: '03',
+    title: 'Клиент',
+    text: 'Поставка точно в срок и полный пакет закрывающих документов.',
+  },
 ]
 
 const years = new Date().getFullYear() - company.sinceYear
@@ -51,8 +38,6 @@ const years = new Date().getFullYear() - company.sinceYear
 export function Home() {
   const hero = useRef<HTMLElement>(null)
   const heroImg = useRef<HTMLImageElement>(null)
-  const dirSection = useRef<HTMLElement>(null)
-  const track = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     document.title = 'ООО «Фаворит» — топливо, СУГ и логистика'
@@ -99,33 +84,8 @@ export function Home() {
     { scope: hero },
   )
 
-  /* ===== НАПРАВЛЕНИЯ: pinned horizontal scroll на desktop ===== */
-  useGSAP(
-    () => {
-      const mm = gsap.matchMedia()
-      mm.add('(min-width: 1024px) and (prefers-reduced-motion: no-preference)', () => {
-        const t = track.current!
-        const getX = () => -(t.scrollWidth - window.innerWidth)
-        gsap.to(t, {
-          x: getX,
-          ease: 'none',
-          scrollTrigger: {
-            trigger: dirSection.current,
-            start: 'top top',
-            end: () => `+=${-getX()}`,
-            pin: true,
-            scrub: 1,
-            invalidateOnRefresh: true,
-          },
-        })
-      })
-      return () => mm.revert()
-    },
-    { scope: dirSection },
-  )
-
   const featured = news[0]
-  const rest = news.slice(1, 5)
+  const rest = news.slice(1, 4)
 
   return (
     <>
@@ -149,7 +109,7 @@ export function Home() {
               className="flex items-center gap-3 text-xs font-semibold tracking-[0.3em] text-accent-400 uppercase"
             >
               <span data-hero-line className="h-px w-10 bg-accent-500" />
-              Топливо · СУГ · Логистика
+              СУГ · Нефтепродукты · Оптовые поставки
             </p>
             <SplitHeading
               as="h1"
@@ -214,19 +174,17 @@ export function Home() {
             </div>
             <div className="lg:border-l lg:border-white/10 lg:pl-8">
               <div className="font-display text-3xl font-bold text-white">
-                <Counter value={4} />
+                <Counter value={2} />
               </div>
-              <p className="mt-1 text-xs tracking-wide text-zinc-400">направления деятельности</p>
+              <p className="mt-1 text-xs tracking-wide text-zinc-400">собственные АЗС · розничная сеть</p>
             </div>
             <div className="lg:border-l lg:border-white/10 lg:pl-8">
               <div className="font-display text-3xl font-bold text-white">СУГ</div>
               <p className="mt-1 text-xs tracking-wide text-zinc-400">и нефтепродукты · опт и розница</p>
             </div>
             <div className="lg:border-l lg:border-white/10 lg:pl-8">
-              <div className="font-display text-3xl font-bold text-white">
-                <Counter value={100} suffix="%" />
-              </div>
-              <p className="mt-1 text-xs tracking-wide text-zinc-400">прямой контакт · без посредников</p>
+              <div className="font-display text-3xl font-bold text-white">MAN TGX</div>
+              <p className="mt-1 text-xs tracking-wide text-zinc-400">собственный парк под СУГ</p>
             </div>
           </div>
         </div>
@@ -236,8 +194,8 @@ export function Home() {
         items={['СУГ', 'Нефтепродукты', 'АЗС', 'Транспорт', `С ${company.sinceYear} года`, 'Прямой контакт']}
       />
 
-      {/* ===== НАПРАВЛЕНИЯ: горизонтальная кино-лента ===== */}
-      <section ref={dirSection} className="relative overflow-hidden py-20 lg:flex lg:min-h-svh lg:flex-col lg:justify-center lg:py-0">
+      {/* ===== НАПРАВЛЕНИЯ: иерархия бизнеса ===== */}
+      <section className="py-20 sm:py-28">
         <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
           <Reveal>
             <p className="text-xs font-semibold tracking-[0.3em] text-zinc-500 uppercase">
@@ -245,54 +203,93 @@ export function Home() {
             </p>
           </Reveal>
           <SplitHeading className="font-display mt-4 max-w-3xl text-3xl font-bold tracking-tight text-white sm:text-5xl">
-            Четыре направления — одна система
+            Опт, розница и собственная логистика
           </SplitHeading>
-        </div>
 
-        <div className="mt-12 lg:mt-16">
-          <div ref={track} className="flex flex-col gap-10 px-5 sm:px-8 lg:w-max lg:flex-row lg:gap-8 lg:pr-[20vw]">
-            {directions.map((d) => (
-              <Link
-                key={d.to}
-                to={d.to}
-                className="group relative block w-full shrink-0 lg:w-[58vw] xl:w-[52vw]"
-              >
-                <div className="relative aspect-[16/10] overflow-hidden lg:aspect-auto lg:h-[58vh]">
-                  <ParallaxImage
-                    src={d.image.src}
-                    alt={d.image.alt}
-                    depth={7}
-                    className="absolute inset-0 transition-transform duration-[1.2s] ease-out group-hover:scale-[1.04]"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-graphite-950/85 via-graphite-950/15 to-transparent" />
-                  {/* номер-водяной знак */}
-                  <span className="font-display absolute -top-4 right-4 text-[7rem] leading-none font-bold text-white/8 select-none sm:text-[9rem]">
-                    {d.num}
-                  </span>
-                  <span className="font-display absolute top-5 left-6 text-sm font-semibold tracking-[0.25em] text-white/60">
-                    {d.num}
-                  </span>
-                  <ArrowUpRight className="absolute top-5 right-6 h-6 w-6 text-white/60 transition-all duration-300 group-hover:translate-x-1 group-hover:-translate-y-1 group-hover:text-accent-400" />
-                  <div className="absolute right-6 bottom-6 left-6 sm:right-10 sm:bottom-8 sm:left-10">
-                    <h3 className="font-display text-2xl leading-tight font-bold text-white sm:text-4xl">
-                      {d.title}
-                    </h3>
-                    <p className="mt-3 max-w-lg text-sm leading-relaxed text-zinc-300 sm:text-base">
-                      {d.text}
-                    </p>
-                    <span className="mt-5 inline-flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-accent-400 uppercase">
-                      Подробнее
-                      <span className="h-px w-8 bg-accent-500 transition-all duration-300 group-hover:w-14" />
-                    </span>
-                  </div>
+          {/* 01 — Опт СУГ: главное направление */}
+          <Link to="/wholesale" className="group relative mt-12 block">
+            <div className="relative h-[52vh] overflow-hidden sm:h-[60vh] lg:h-[70vh]">
+              <ParallaxImage
+                src={assets.wholesale.src}
+                alt={assets.wholesale.alt}
+                depth={7}
+                className="absolute inset-0 transition-transform duration-[1.2s] ease-out group-hover:scale-[1.04]"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-graphite-950/90 via-graphite-950/25 to-transparent" />
+              <ArrowUpRight className="absolute top-6 right-6 h-6 w-6 text-white/60 transition-all duration-300 group-hover:translate-x-1 group-hover:-translate-y-1 group-hover:text-accent-400" />
+              <div className="absolute right-6 bottom-8 left-6 sm:right-10 sm:bottom-12 sm:left-10">
+                <p className="text-[11px] font-semibold tracking-[0.28em] text-accent-400 uppercase">
+                  01 · Главное направление
+                </p>
+                <h3 className="font-display mt-3 max-w-3xl text-3xl leading-[1.02] font-bold text-white sm:text-5xl lg:text-6xl">
+                  Оптовые поставки СУГ
+                </h3>
+                <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-300 sm:text-base">
+                  Сжиженный углеводородный газ и нефтепродукты оптовыми партиями для
+                  юридических лиц. Договор, прозрачные условия, поставка точно в срок.
+                </p>
+                <span className="mt-6 inline-flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-accent-400 uppercase">
+                  Подробнее
+                  <span className="h-px w-8 bg-accent-500 transition-all duration-300 group-hover:w-14" />
+                </span>
+              </div>
+            </div>
+          </Link>
+
+          {/* 02 — АЗС и 03 — собственный парк */}
+          <div className="mt-8 grid gap-8 lg:grid-cols-5">
+            <Link to="/stations" className="group relative block lg:col-span-3">
+              <div className="relative h-[40vh] overflow-hidden sm:h-[46vh]">
+                <ParallaxImage
+                  src={assets.stations.src}
+                  alt={assets.stations.alt}
+                  depth={7}
+                  className="absolute inset-0 transition-transform duration-[1.2s] ease-out group-hover:scale-[1.04]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-graphite-950/85 via-graphite-950/20 to-transparent" />
+                <ArrowUpRight className="absolute top-5 right-5 h-5 w-5 text-white/60 transition-all duration-300 group-hover:translate-x-1 group-hover:-translate-y-1 group-hover:text-accent-400" />
+                <div className="absolute right-6 bottom-6 left-6 sm:bottom-8 sm:left-8">
+                  <p className="text-[11px] font-semibold tracking-[0.28em] text-accent-400 uppercase">
+                    02 · Розничная сеть
+                  </p>
+                  <h3 className="font-display mt-2.5 text-2xl leading-tight font-bold text-white sm:text-4xl">
+                    Автозаправочные станции
+                  </h3>
+                  <p className="mt-2.5 max-w-md text-sm leading-relaxed text-zinc-300">
+                    Собственные АЗС с актуальными ценами на топливо. Розница под
+                    контролем компании.
+                  </p>
                 </div>
-              </Link>
-            ))}
+              </div>
+            </Link>
+            <Link to="/transport" className="group relative block lg:col-span-2">
+              <div className="relative h-[40vh] overflow-hidden sm:h-[46vh]">
+                <ParallaxImage
+                  src={assets.transport.src}
+                  alt={assets.transport.alt}
+                  depth={7}
+                  className="absolute inset-0 transition-transform duration-[1.2s] ease-out group-hover:scale-[1.04]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-graphite-950/85 via-graphite-950/20 to-transparent" />
+                <ArrowUpRight className="absolute top-5 right-5 h-5 w-5 text-white/60 transition-all duration-300 group-hover:translate-x-1 group-hover:-translate-y-1 group-hover:text-accent-400" />
+                <div className="absolute right-6 bottom-6 left-6 sm:bottom-8 sm:left-8">
+                  <p className="text-[11px] font-semibold tracking-[0.28em] text-accent-400 uppercase">
+                    03 · Собственная логистика
+                  </p>
+                  <h3 className="font-display mt-2.5 text-2xl leading-tight font-bold text-white sm:text-3xl">
+                    Собственный парк
+                  </h3>
+                  <p className="mt-2.5 max-w-md text-sm leading-relaxed text-zinc-300">
+                    MAN TGX с цистерной ППЦТ PRIZMA: перевозим то, что продаём.
+                  </p>
+                </div>
+              </div>
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* ===== КАК МЫ РАБОТАЕМ ===== */}
+      {/* ===== ЛИНИЯ ПОСТАВКИ ===== */}
       <section className="border-y border-white/8 bg-graphite-900/40 py-20 sm:py-28">
         <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
           <Reveal>
@@ -301,19 +298,28 @@ export function Home() {
             </p>
           </Reveal>
           <SplitHeading className="font-display mt-4 text-3xl font-bold tracking-tight text-white sm:text-5xl">
-            Как проходит поставка
+            От терминала до клиента
           </SplitHeading>
 
-          <div className="mt-14 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
-            {workflow.map((w, i) => (
-              <Reveal key={w.step} delay={i * 90}>
-                <div className="group border-t border-white/15 pt-5 transition-colors duration-500 hover:border-accent-500">
-                  <span className="font-display text-sm font-semibold text-accent-400">{w.step}</span>
-                  <h3 className="font-display mt-3 text-lg font-semibold text-white">{w.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-400">{w.text}</p>
-                </div>
-              </Reveal>
-            ))}
+          <div className="relative mt-14">
+            {/* непрерывная линия поставки через узлы */}
+            <div className="absolute top-[5px] right-0 left-0 hidden h-px bg-white/15 sm:block" aria-hidden="true" />
+            <div className="grid gap-10 sm:grid-cols-3 sm:gap-8">
+              {workflow.map((w, i) => (
+                <Reveal key={w.step} delay={i * 120}>
+                  <div className="relative">
+                    <span className="block h-[11px] w-[11px] rounded-full bg-accent-500" />
+                    <span className="font-display mt-5 block text-sm font-semibold text-accent-400">
+                      {w.step}
+                    </span>
+                    <h3 className="font-display mt-2 text-xl font-semibold text-white sm:text-2xl">
+                      {w.title}
+                    </h3>
+                    <p className="mt-2 max-w-xs text-sm leading-relaxed text-zinc-400">{w.text}</p>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
           </div>
 
           <Reveal delay={200}>
@@ -331,29 +337,19 @@ export function Home() {
         </div>
       </section>
 
-      {/* ===== НОВОСТИ: editorial-медиацентр ===== */}
-      <section className="py-20 sm:py-28">
+      {/* ===== НОВОСТИ: короткий редакционный блок ===== */}
+      <section className="py-16 sm:py-20">
         <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
-          <div className="flex items-end justify-between gap-6">
-            <div>
-              <Reveal>
-                <p className="text-xs font-semibold tracking-[0.3em] text-zinc-500 uppercase">
-                  Информационный центр
-                </p>
-              </Reveal>
-              <SplitHeading className="font-display mt-4 text-3xl font-bold tracking-tight text-white sm:text-5xl">
-                Новости
-              </SplitHeading>
-            </div>
-            <Reveal>
-              <span className="hidden items-center gap-2 text-xs font-semibold tracking-[0.2em] text-zinc-500 uppercase sm:flex">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-500" />
-                Обновляется
-              </span>
-            </Reveal>
-          </div>
+          <Reveal>
+            <p className="text-xs font-semibold tracking-[0.3em] text-zinc-500 uppercase">
+              Новости компании
+            </p>
+          </Reveal>
+          <SplitHeading className="font-display mt-4 text-2xl font-bold tracking-tight text-white sm:text-3xl">
+            Новости
+          </SplitHeading>
 
-          <div className="mt-12 grid gap-12 lg:grid-cols-[1.45fr_1fr] lg:gap-16">
+          <div className="mt-10 grid gap-10 lg:grid-cols-[1.45fr_1fr] lg:gap-16">
             {/* главная новость */}
             <Reveal>
               <article className="group">
@@ -363,10 +359,10 @@ export function Home() {
                   </span>
                   <span className="text-xs text-zinc-500">{formatDate(featured.date)}</span>
                 </div>
-                <h3 className="font-display mt-5 text-2xl leading-[1.12] font-bold text-white sm:text-4xl">
+                <h3 className="font-display mt-4 text-xl leading-[1.15] font-bold text-white sm:text-2xl">
                   {featured.title}
                 </h3>
-                <p className="mt-5 max-w-xl text-base leading-relaxed text-zinc-400">
+                <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-400 sm:text-base">
                   {featured.description}
                 </p>
               </article>

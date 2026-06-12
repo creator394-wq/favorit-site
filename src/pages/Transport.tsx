@@ -1,4 +1,3 @@
-import { Route, ShieldCheck, Truck } from 'lucide-react'
 import { assets } from '../config/assets'
 import { ContactButtons } from '../components/ui/ContactButtons'
 import { PageHeader } from '../components/ui/PageHeader'
@@ -6,31 +5,14 @@ import { Reveal } from '../components/ui/Reveal'
 import { SplitHeading } from '../components/motion/SplitHeading'
 import { ParallaxImage } from '../components/motion/ParallaxImage'
 import { Marquee } from '../components/motion/Marquee'
-import { Tilt } from '../components/motion/Tilt'
 
-const features = [
-  {
-    icon: Truck,
-    title: 'Перевозка топлива и СУГ',
-    text: 'Специализированная транспортировка нефтепродуктов и сжиженного углеводородного газа.',
-  },
-  {
-    icon: Route,
-    title: 'Гибкие маршруты',
-    text: 'Направления и графики перевозок согласовываются под задачи клиента.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Безопасность',
-    text: 'Соблюдение требований к перевозке опасных грузов на каждом этапе.',
-  },
-]
-
-/** Транспортный канон бренда. */
+/** Технический канон парка. Только подтверждённые данные — без домыслов. */
 const canon = [
   { label: 'Тягач', value: 'MAN TGX 18.400 4x2' },
-  { label: 'Полуприцеп', value: 'ППЦТ PRIZMA · LPG / СУГ' },
-  { label: 'Груз', value: 'СУГ · светлые нефтепродукты' },
+  { label: 'Полуприцеп', value: 'ППЦТ PRIZMA · LPG' },
+  { label: 'Шасси', value: '3-осный полуприцеп-цистерна' },
+  { label: 'Груз', value: 'СУГ · пропан' },
+  { label: 'Режим перевозки', value: 'ДОПОГ · опасный груз' },
 ]
 
 export function Transport() {
@@ -39,8 +21,8 @@ export function Transport() {
       <PageHeader
         image={assets.transport}
         kicker="Транспорт"
-        title="Перевозка топлива и СУГ"
-        subtitle="Техника — главный герой направления: специализированный подвижной состав под СУГ и нефтепродукты."
+        title="Собственный парк"
+        subtitle="Перевозим то, что продаём: собственная сцепка под СУГ — гарантия контроля поставки на каждом километре."
       />
 
       {/* ===== ТРАНСПОРТНЫЙ КАНОН ===== */}
@@ -80,34 +62,50 @@ export function Transport() {
 
       <Marquee
         className="mt-20 sm:mt-28"
-        items={['MAN TGX 18.400', 'ППЦТ PRIZMA', 'СУГ', 'Нефтепродукты', 'Согласованные маршруты']}
+        items={['MAN TGX 18.400', 'ППЦТ PRIZMA', 'СУГ · Пропан', 'ДОПОГ', 'Собственный парк']}
       />
 
-      {/* преимущества */}
-      <section className="mx-auto mt-20 w-full max-w-7xl px-5 sm:mt-28 sm:px-8">
-        <div className="grid gap-5 md:grid-cols-3">
-          {features.map((f, i) => (
-            <Reveal key={f.title} delay={i * 100} className="h-full">
-              <Tilt className="h-full">
-                <div className="group h-full border border-white/10 bg-graphite-900/60 p-7 transition-colors duration-500 hover:border-white/25 sm:p-8">
-                  <f.icon className="h-7 w-7 text-accent-400 transition-transform duration-500 group-hover:scale-110" />
-                  <h2 className="font-display mt-5 text-lg font-semibold text-white">{f.title}</h2>
-                  <p className="mt-2.5 text-sm leading-relaxed text-zinc-400 sm:text-base">{f.text}</p>
-                </div>
-              </Tilt>
-            </Reveal>
-          ))}
+      {/* ===== POSTER: ОГНЕОПАСНО (слот P01 — фон заменится финальным кадром) ===== */}
+      <section className="mt-20 border-y border-white/8 bg-graphite-900/40 sm:mt-28">
+        <div className="mx-auto w-full max-w-7xl px-5 py-20 sm:px-8 sm:py-28">
+          <Reveal>
+            <p className="text-xs font-semibold tracking-[0.3em] text-zinc-500 uppercase">
+              Безопасность
+            </p>
+          </Reveal>
+          <Reveal delay={80}>
+            <div className="mt-8 flex items-center gap-5 sm:gap-8" aria-hidden="true">
+              <span className="h-1 flex-1 bg-accent-600/70" />
+              <span className="h-1 w-10 bg-accent-500 sm:w-16" />
+            </div>
+          </Reveal>
+          <SplitHeading className="font-display mt-6 text-[2.4rem] leading-[0.95] font-bold tracking-[0.04em] text-white uppercase sm:text-7xl lg:text-[6.5rem]">
+            Огнеопасно
+          </SplitHeading>
+          <Reveal delay={120}>
+            <div className="mt-6 flex items-center gap-5 sm:gap-8" aria-hidden="true">
+              <span className="h-1 w-10 bg-accent-500 sm:w-16" />
+              <span className="h-1 flex-1 bg-accent-600/70" />
+            </div>
+          </Reveal>
+          <Reveal delay={180}>
+            <p className="mt-10 max-w-xl text-sm leading-relaxed text-zinc-400 sm:text-base">
+              Маркировка на цистерне — не декорация. Парк работает в режиме
+              перевозки опасных грузов: специализированная цистерна под СУГ
+              и требования ДОПОГ на каждом этапе — от налива до слива.
+            </p>
+          </Reveal>
         </div>
       </section>
 
       {/* CTA */}
       <section className="mx-auto mt-20 w-full max-w-7xl px-5 sm:mt-28 sm:px-8">
         <SplitHeading className="font-display max-w-3xl text-3xl leading-[1.05] font-bold tracking-tight text-white sm:text-5xl">
-          Нужна перевозка топлива или СУГ?
+          Нужна поставка с доставкой?
         </SplitHeading>
         <Reveal delay={120}>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-400 sm:text-base">
-            Согласуем маршрут, объём и условия — свяжитесь с нами удобным способом.
+            Согласуем объём, маршрут и условия — поставка приедет нашей цистерной.
           </p>
         </Reveal>
         <Reveal delay={200}>

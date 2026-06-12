@@ -2,10 +2,11 @@
 // Обновляет цены сайта через scripts/update-prices.mjs с подтверждением.
 // Деплой — вариант B: build + Vercel deploy hook. Git push бот НЕ делает.
 
-import { Bot, InlineKeyboard } from 'grammy'
+import { Bot, InlineKeyboard, InputFile } from 'grammy'
 import { config, isAdmin } from './config.mjs'
 import { validateFuel, FUEL_KEYS, STATION_KEYS } from '../scripts/lib/validate.mjs'
 import { readPrices, runUpdate, runBuild, runDeploy, gitDeploy } from './prices.mjs'
+import { checkHealth, takeScreenshot, gitVersion, formatTs, SITE_URL } from './monitor.mjs'
 
 const LABELS = { ai92: 'АИ-92', ai95: 'АИ-95', dt: 'ДТ', gas: 'СУГ' }
 
@@ -33,7 +34,13 @@ bot.command('start', async (ctx) => {
       '/price azs1 ai92=60.10 ai95=65.10 dt=69.10 gas=32.10 — обновить цены одной АЗС\n' +
       `   (АЗС: ${STATION_KEYS.join(' | ')})\n` +
       '/publish — задеплоить сайт (Vercel deploy hook)\n\n' +
-      'Любое изменение требует подтверждения кнопкой.',
+      'Мониторинг:\n' +
+      '/health — доступность сайта\n' +
+      '/site-status — цены + состояние сайта\n' +
+      '/screenshot — скриншот главной\n' +
+      '/deploy — ручной деплой\n' +
+      '/version — git-ветка/коммит + дата цен\n\n' +
+      'Любое изменение цен требует подтверждения кнопкой.',
   )
 })
 
@@ -139,6 +146,93 @@ bot.command('publish', async (ctx) => {
     .text('🚀 Деплой', 'publish:confirm')
     .text('✖ Отмена', 'publish:cancel')
   await ctx.reply('Запустить деплой сайта через Vercel deploy hook?', { reply_markup: kb })
+})
+
+// ===== E6 — мониторинг (поверх существующей логики, ничего не ломает) =====
+
+// --- /health ---
+bot.command('health', async (ctx) => {
+  const h = await checkHealth()
+  if (h.ok) {
+    await ctx.reply(
+      `🟢 Сайт работает\n\nURL: ${SITE_URL}\nHTTP: ${h.status}\nResponse: ${h.ms} ms\nSSL: ${h.ssl}`,
+    )
+  } else {
+    await ctx.reply(`🔴 Сайт недоступен\nОшибка: ${h.error ?? `HTTP ${h.status}`}`)
+  }
+})
+
+// --- /site-status ---
+bot.command('site-status', async (ctx) => {
+  let p
+  try {
+    p = await readPrices()
+  } catch (err) {
+    await ctx.reply(`Не удалось прочитать prices.json: ${err.message}`)
+    return
+  }
+  const blocks = STATION_KEYS.map((sid) => {
+    const st = p.stations?.[sid]
+    const rows = FUEL_KEYS.map((k) => `${LABELS[k]}: ${st?.fuel?.[k] ?? '—'}`)
+    return [`${st?.name ?? sid}`, ...rows].join('\n')
+  })
+  const h = await checkHealth()
+  const siteLine = h.ok ? '🟢 ONLINE' : '🔴 OFFLINE'
+  await ctx.reply(
+    '📊 Статус сайта\n\n' +
+      blocks.join('\n\n') +
+      `\n\nПоследнее обновление:\n${formatTs(p.updatedAt)}` +
+      `\nИсточник: ${p.source ?? '—'}` +
+      `\n\nСайт:\n${siteLine}`,
+  )
+})
+
+// --- /screenshot ---
+bot.command('screenshot', async (ctx) => {
+  await ctx.reply('Делаю скриншот главной…')
+  const shot = await takeScreenshot()
+  if (!shot.ok) {
+    await ctx.reply(`❌ Screenshot failed\n${shot.error}`)
+    return
+  }
+  try {
+    await ctx.replyWithPhoto(new InputFile(shot.path), { caption: SITE_URL })
+  } catch (err) {
+    await ctx.reply(`❌ Screenshot failed\nОтправка не удалась: ${err.message}\nФайл: ${shot.path}`)
+  }
+})
+
+// --- /deploy (ручной, прямой вызов runDeploy) ---
+bot.command('deploy', async (ctx) => {
+  const deploy = await runDeploy()
+  if (deploy.status === 'ok') {
+    await ctx.reply('🚀 Deploy started')
+  } else if (deploy.status === 'skipped') {
+    await ctx.reply('❌ Deploy failed\nVERCEL_DEPLOY_HOOK_URL не задан')
+  } else {
+    await ctx.reply(`❌ Deploy failed\n${deploy.message}`)
+  }
+})
+
+// --- /version ---
+bot.command('version', async (ctx) => {
+  const v = await gitVersion()
+  let p
+  try {
+    p = await readPrices()
+  } catch {
+    p = {}
+  }
+  if (v.error) {
+    await ctx.reply(`Version:\nНе удалось получить git-данные: ${v.error}`)
+    return
+  }
+  await ctx.reply(
+    'Version:\n' +
+      `Branch: ${v.branch}\n` +
+      `Commit: ${v.commit}\n` +
+      `Prices updated:\n${formatTs(p.updatedAt)}`,
+  )
 })
 
 // --- callbacks ---

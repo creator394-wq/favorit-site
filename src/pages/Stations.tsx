@@ -1,11 +1,17 @@
 import { Clock, MapPin } from 'lucide-react'
-import { gasStations } from '../data/gasStations'
+import { gasStations, pricesUpdatedAt } from '../data/gasStations'
 import { assets } from '../config/assets'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Reveal } from '../components/ui/Reveal'
 import { SplitHeading } from '../components/motion/SplitHeading'
 
 export function Stations() {
+  const updatedLabel = new Date(pricesUpdatedAt).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
   return (
     <>
       <PageHeader
@@ -82,6 +88,7 @@ export function Stations() {
           <p className="mt-7 text-sm text-zinc-500">
             Цены носят информационный характер. Актуальную стоимость уточняйте на АЗС.
           </p>
+          <p className="mt-2 text-xs text-zinc-600">Обновлено: {updatedLabel}</p>
         </Reveal>
       </section>
     </>

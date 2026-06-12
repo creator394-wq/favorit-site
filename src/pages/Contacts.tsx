@@ -2,6 +2,7 @@ import { ArrowUpRight, Mail, MessageCircle, Phone, Send } from 'lucide-react'
 import { useEffect } from 'react'
 import { contacts } from '../data/contacts'
 import { Reveal } from '../components/ui/Reveal'
+import { LeadForm } from '../components/ui/LeadForm'
 import { SplitHeading } from '../components/motion/SplitHeading'
 import { Magnetic } from '../components/motion/Magnetic'
 
@@ -90,9 +91,15 @@ export function Contacts() {
 
         <Reveal delay={200}>
           <p className="mt-7 text-sm text-zinc-500">
-            Обращения принимаются только по телефону, в WhatsApp, Telegram и по email —
-            без форм и онлайн-заявок.
+            Свяжитесь удобным способом — по телефону, в WhatsApp, Telegram, по email
+            или оставьте заявку ниже.
           </p>
+        </Reveal>
+      </section>
+
+      <section className="mx-auto mt-12 w-full max-w-3xl px-5 pb-4 sm:px-8">
+        <Reveal>
+          <LeadForm />
         </Reveal>
       </section>
     </>

@@ -15,8 +15,24 @@ import {
   formatTs,
   SITE_URL,
 } from './monitor.mjs'
+import { readLeads, clearLeads, leadStats } from './leads.mjs'
+import { startLeadApi } from './leadApi.mjs'
 
 const LABELS = { ai92: 'АИ-92', ai95: 'АИ-95', dt: 'ДТ', gas: 'СУГ' }
+
+// dd.mm.yyyy HH:MM / dd.mm.yyyy (бот — обычный Node, Date доступен)
+function formatRu(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const p = (n) => String(n).padStart(2, '0')
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+function formatRuDate(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const p = (n) => String(n).padStart(2, '0')
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}`
+}
 
 // Ожидающие подтверждения операции по userId (in-memory).
 const pending = new Map()
@@ -266,7 +282,12 @@ const HELP_TEXT =
   '/logs — последние логи бота\n' +
   '/check — быстрая сводная проверка\n' +
   '/quick_price — шпаргалка по формату цен\n' +
-  '/restart_info — как перезапустить бота'
+  '/restart_info — как перезапустить бота\n\n' +
+  'Заявки (CRM):\n' +
+  '/leads — последние 10 заявок\n' +
+  '/lead_last — последняя заявка целиком\n' +
+  '/lead_stats — статистика заявок\n' +
+  '/lead_clear — очистить заявки (с подтверждением)'
 
 // --- /help ---
 bot.command('help', async (ctx) => {
@@ -355,6 +376,73 @@ bot.command('restart_info', async (ctx) => {
       'cd C:\\Users\\Данил\\favorit-site\n' +
       'npm run bot',
   )
+})
+
+// ===== E8 — Lead Manager (мини-CRM) =====
+
+// --- /leads (последние 10) ---
+bot.command('leads', async (ctx) => {
+  try {
+    const { leads } = await readLeads()
+    if (!leads.length) {
+      await ctx.reply('📋 Заявок пока нет.')
+      return
+    }
+    const last10 = leads.slice(-10).reverse()
+    const text = last10
+      .map((l, i) => `#${leads.length - i}\n${l.name}\n${l.phone}\n${formatRuDate(l.createdAt)}`)
+      .join('\n\n')
+    await ctx.reply('📋 Последние заявки\n\n' + text)
+  } catch (err) {
+    await ctx.reply(`❌ /leads недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /lead_stats ---
+bot.command('lead_stats', async (ctx) => {
+  try {
+    const s = await leadStats()
+    await ctx.reply(
+      '📈 Статистика заявок\n\n' +
+        `Всего заявок: ${s.total}\n` +
+        `Сегодня: ${s.today}\n` +
+        `За 7 дней: ${s.week}\n` +
+        `Последняя заявка: ${s.last ? formatRu(s.last.createdAt) : '—'}`,
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /lead_stats недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /lead_last (последняя заявка полностью) ---
+bot.command('lead_last', async (ctx) => {
+  try {
+    const { leads } = await readLeads()
+    const l = leads[leads.length - 1]
+    if (!l) {
+      await ctx.reply('Заявок пока нет.')
+      return
+    }
+    await ctx.reply(
+      `📋 Последняя заявка #${leads.length}\n\n` +
+        `Имя:\n${l.name}\n\n` +
+        `Телефон:\n${l.phone}\n\n` +
+        `Комментарий:\n${l.message || '—'}\n\n` +
+        `Время:\n${formatRu(l.createdAt)}\n\n` +
+        `Источник:\n${l.source}`,
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /lead_last недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /lead_clear (только через подтверждение) ---
+bot.command('lead_clear', async (ctx) => {
+  pending.set(ctx.from.id, { type: 'lead_clear' })
+  const kb = new InlineKeyboard()
+    .text('✅ Очистить', 'lead_clear:confirm')
+    .text('❌ Отмена', 'lead_clear:cancel')
+  await ctx.reply('Очистить ВСЕ заявки? Действие необратимо.', { reply_markup: kb })
 })
 
 // --- callbacks ---
@@ -464,9 +552,53 @@ bot.callbackQuery('publish:confirm', async (ctx) => {
   await ctx.reply('🚀 Деплой запущен (Vercel). Git push бот не делает.')
 })
 
+// --- lead_clear callbacks ---
+bot.callbackQuery('lead_clear:cancel', async (ctx) => {
+  pending.delete(ctx.from.id)
+  await ctx.answerCallbackQuery()
+  await ctx.editMessageText('Отменено.')
+})
+
+bot.callbackQuery('lead_clear:confirm', async (ctx) => {
+  const op = pending.get(ctx.from.id)
+  if (!op || op.type !== 'lead_clear') {
+    await ctx.answerCallbackQuery({ text: 'Нечего подтверждать' })
+    return
+  }
+  pending.delete(ctx.from.id)
+  await ctx.answerCallbackQuery()
+  try {
+    await clearLeads()
+    await ctx.editMessageText('🗑 Все заявки очищены.')
+  } catch (err) {
+    await ctx.editMessageText(`❌ Не удалось очистить: ${err.message}`)
+  }
+})
+
 bot.catch((err) => {
   // Не логируем токен/чувствительные данные — только сообщение.
   console.error('Bot error:', err.error?.message ?? err.message ?? 'unknown')
 })
+
+// ===== E8 — приём заявок с сайта + мгновенное уведомление админов =====
+async function notifyLead(lead) {
+  const text =
+    '🔔 Новая заявка\n\n' +
+    `Имя:\n${lead.name}\n\n` +
+    `Телефон:\n${lead.phone}\n\n` +
+    `Комментарий:\n${lead.message || '—'}\n\n` +
+    `Время:\n${formatRu(lead.createdAt)}\n\n` +
+    `Источник:\n${lead.source}`
+  for (const id of config.adminIds) {
+    try {
+      await bot.api.sendMessage(id, text)
+    } catch {
+      // не валим процесс из-за одного недоставленного уведомления
+    }
+  }
+}
+
+const LEAD_API_PORT = Number(process.env.LEAD_API_PORT || 8787)
+startLeadApi({ port: LEAD_API_PORT, onLead: notifyLead })
 
 bot.start({ onStart: () => console.log('✅ Price bot запущен (long polling).') })

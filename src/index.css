@@ -8,18 +8,22 @@
  */
 
 @theme {
-  /* графитовая шкала */
-  --color-graphite-950: #0a0c0f;
-  --color-graphite-900: #101318;
-  --color-graphite-850: #14181e;
-  --color-graphite-800: #1a1f27;
-  --color-graphite-700: #262d38;
-  --color-graphite-600: #353e4c;
+  /* тёмно-зелёная шкала — реальный фон бренда «Фаворит Сервис» (АЗС ночью) */
+  --color-graphite-950: #06140e;
+  --color-graphite-900: #0a1f16;
+  --color-graphite-850: #0d2519;
+  --color-graphite-800: #102d1f;
+  --color-graphite-700: #1a4231;
+  --color-graphite-600: #265a41;
 
-  /* единственный акцент — тёплый янтарно-оранжевый (свет фар) */
-  --color-accent-400: #ff9447;
-  --color-accent-500: #f57a1e;
-  --color-accent-600: #dd650e;
+  /* акцент — фирменный станционный жёлтый (навес/табло АЗС) */
+  --color-accent-400: #ffd426;
+  --color-accent-500: #f5c518;
+  --color-accent-600: #d9a800;
+
+  /* фирменный зелёный — знак, оваль логотипа, вторичные акценты */
+  --color-brand-green-500: #0e6b3f;
+  --color-brand-green-400: #16a05c;
 
   --font-display: "Inter Tight", system-ui, sans-serif;
   --font-sans: "Inter", system-ui, sans-serif;

@@ -7,18 +7,17 @@ import { ContactButtons } from '../ui/ContactButtons'
 import { Magnetic } from '../motion/Magnetic'
 import { lenis } from '../motion/SmoothScroll'
 
-/** Спокойный wordmark: знак-литера + название. Без вращений и градиентов. */
+/** Логотип бренда «Фаворит Сервис»: реальный фирменный знак. */
 export function Logo({ onClick }: { onClick?: () => void }) {
   return (
     <Link to="/" onClick={onClick} className="flex items-center gap-3">
-      <span className="font-display flex h-9 w-9 items-center justify-center bg-accent-500 text-base font-bold text-graphite-950">
-        Ф
-      </span>
+      <img
+        src="/assets/logo-favorit-service.png"
+        alt="Фаворит Сервис"
+        className="h-10 w-auto sm:h-12"
+      />
       <span className="leading-none">
-        <span className="font-display block text-lg font-bold tracking-[0.08em] text-white">
-          ФАВОРИТ
-        </span>
-        <span className="mt-1 block text-[10px] font-medium tracking-[0.28em] text-zinc-500 uppercase">
+        <span className="block text-[10px] font-medium tracking-[0.28em] text-zinc-500 uppercase">
           СУГ · Нефтепродукты · АЗС
         </span>
       </span>

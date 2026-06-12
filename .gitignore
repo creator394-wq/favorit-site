@@ -28,3 +28,4 @@ ruvector.db
 *.sln
 *.sw?
 .vercel
+.env*

@@ -37,6 +37,8 @@ src/data/leads.json
 src/data/reminders.json
 src/data/trucks.json
 src/data/maintenance.json
+src/data/tasks.json
+src/data/alerts.json
 
 # E21 — Obsidian проектная память: локальные заметки, /session_log часто
 # переписывает CHANGELOG. Не коммитятся — иначе ломают ценовой gitDeploy.

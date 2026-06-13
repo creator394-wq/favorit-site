@@ -41,6 +41,11 @@ const HELP_TEXT =
   'Автопарк (СКАУТ):\n' +
   '/scout_status · /scout_fleet (/fleet) · /scout_truck <id|номер>\n' +
   '/scout_fuel · /scout_map <id|номер> · /scout_offline\n\n' +
+  'AI Director (E32–E40):\n' +
+  '/report — Executive Report · /dashboard — Executive Dashboard\n' +
+  '/operations · /ceo_report · /alerts\n' +
+  '/tasks · /task_new <текст> · /task_view <id>\n' +
+  '/task_done <id> · /task_cancel <id>\n\n' +
   'Проектная память: /docs · /roadmap · /session_log <текст>\n\n' +
   'Аудит и бэкапы:\n' +
   '/audit · /audit_last · /audit_search <слово>\n' +
@@ -53,6 +58,8 @@ const withBack = (kb) => kb.row().text('🔙 Назад', 'menu:main')
 function mainMenuKb() {
   return new InlineKeyboard()
     .text('🏢 Дашборд', 'menu:act:dashboard')
+    .row()
+    .text('🤖 AI Director', 'menu:sec:ai')
     .row()
     .text('⛽ Цены АЗС', 'menu:sec:prices')
     .text('📞 Заявки / CRM', 'menu:sec:crm')
@@ -68,6 +75,19 @@ function mainMenuKb() {
 
 // Подменю: каждое заканчивается кнопкой 🔙 Назад.
 const SECTIONS = {
+  ai: () =>
+    withBack(
+      new InlineKeyboard()
+        .text('📋 Tasks', 'menu:act:tasks')
+        .row()
+        .text('🚨 Alerts', 'menu:act:alerts')
+        .row()
+        .text('🏢 Operations', 'menu:act:operations')
+        .row()
+        .text('👔 CEO Report', 'menu:act:ceo_report')
+        .row()
+        .text('📊 Executive Dashboard', 'menu:act:dashboard'),
+    ),
   prices: () =>
     withBack(
       new InlineKeyboard()
@@ -158,6 +178,7 @@ const SECTIONS = {
 }
 
 const SECTION_TITLES = {
+  ai: '🤖 AI Director',
   prices: '⛽ Цены АЗС',
   crm: '📞 Заявки / CRM',
   transport: '🚚 Транспорт',

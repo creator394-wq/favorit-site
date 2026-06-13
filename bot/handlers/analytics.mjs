@@ -1,12 +1,12 @@
 // E28 — аналитика и бизнес: /analytics, /top_pages, /sources, /conversion,
 // /report (AI Director), /dashboard (Control Center). Поведение идентично.
 import { getOverview, getTopPages, getTrafficSources, getConversion } from '../analytics.mjs'
-import { directorReport } from '../director.mjs'
-import { analyzeBusiness, ceoReport } from '../operations.mjs'
+import { analyzeBusiness, ceoReport, executiveReport } from '../operations.mjs'
 import { getFleetStats } from '../scout.mjs'
 import { readPrices } from '../prices.mjs'
 import { readLeads, leadStats } from '../leads.mjs'
 import { listReminders } from '../reminders.mjs'
+import { taskStats } from '../tasks.mjs'
 import { news, promos } from '../collections.mjs'
 import { listBackups } from '../backup.mjs'
 import { logEvent, lastEvent, lastEventMatching } from '../audit.mjs'
@@ -111,14 +111,12 @@ export function registerAnalyticsHandlers(bot, deps) {
     }
   })
 
-  // ===== E25/E31.5 — AI Director (/report) — использует CRM+Scout+Analytics+Content+Site =====
+  // ===== E40 — AI Director 2.0 (/report) — CRM+Scout+Analytics+Content+Site+Tasks+Alerts =====
   command('report', async (ctx) => {
     try {
       await logEvent({ userId: ctx.from.id, action: 'director_report', details: 'manual /report' })
-      const [{ text }, b] = await Promise.all([directorReport(), analyzeBusiness().catch(() => null)])
-      let out = text
-      if (b) out += `\n\n——————————————\nCEO Score: ${b.ceoScore}/100 · Приоритет: ${b.priority}`
-      await ctx.reply(out)
+      const { text } = await executiveReport()
+      await ctx.reply(text.slice(0, 3800))
     } catch (err) {
       await ctx.reply(`❌ /report недоступен\nОшибка: ${err.message}`)
     }
@@ -160,7 +158,7 @@ export function registerAnalyticsHandlers(bot, deps) {
   command('dashboard', async (ctx) => {
     try {
       await logEvent({ userId: ctx.from.id, action: 'dashboard_view', details: 'control center' })
-      const [h, p, s, leadsData, reminders, newsList, promoList, v, backups, lastDep, lastEv, fleet, ops] =
+      const [h, p, s, leadsData, reminders, newsList, promoList, v, backups, lastDep, lastEv, fleet, ops, tasks] =
         await Promise.all([
           checkHealth(),
           readPrices().catch(() => ({})),
@@ -175,6 +173,7 @@ export function registerAnalyticsHandlers(bot, deps) {
           lastEvent().catch(() => null),
           getFleetStats().catch(() => ({ error: true })),
           analyzeBusiness().catch(() => null),
+          taskStats().catch(() => null),
         ])
 
       const stationCount = p.stations ? Object.keys(p.stations).length : 0
@@ -220,8 +219,13 @@ export function registerAnalyticsHandlers(bot, deps) {
           `Новости: ${newsList.length}\n` +
           `Акции: ${promoList.length}\n\n` +
           `${fleetBlock}\n\n` +
+          '🤖 AI Director\n' +
           `CEO Score: ${ops ? `${ops.ceoScore}/100` : '—'}\n` +
-          `Operations: ${ops ? ops.priority : '—'}\n\n` +
+          `Business Health: ${ops ? `${ops.health.overall}%` : '—'}\n` +
+          `Priority: ${ops ? ops.priority : '—'}\n` +
+          `Активные проблемы: ${ops ? ops.issues.length : '—'}\n` +
+          `Открытые задачи: ${tasks ? tasks.open : '—'}\n` +
+          `Открытые лиды: ${s.byStatus.new + s.byStatus.in_progress}\n\n` +
           `Последний deploy: ${lastDeployLine}\n` +
           `Последний backup: ${lastBackupName}\n` +
           `Последний audit: ${lastAuditLine}\n\n` +

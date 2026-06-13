@@ -7,6 +7,7 @@ import { Bot } from 'grammy'
 import { config, isAdmin } from './config.mjs'
 import { popDueReminders } from './reminders.mjs'
 import { ceoReport } from './operations.mjs'
+import { runWatchers } from './watchers.mjs'
 import { createBackup } from './backup.mjs'
 import { logEvent } from './audit.mjs'
 import { startLeadApi } from './leadApi.mjs'
@@ -17,6 +18,7 @@ import { registerMonitoringHandlers } from './handlers/monitoring.mjs'
 import { registerLeadHandlers } from './handlers/leads.mjs'
 import { registerScoutHandlers } from './handlers/scout.mjs'
 import { registerAnalyticsHandlers } from './handlers/analytics.mjs'
+import { registerTaskHandlers } from './handlers/tasks.mjs'
 import { registerSystemHandlers } from './handlers/system.mjs'
 import { registerContentHandlers } from './handlers/content.mjs'
 
@@ -56,6 +58,7 @@ registerMonitoringHandlers(bot, deps)
 registerLeadHandlers(bot, deps)
 registerScoutHandlers(bot, deps)
 registerAnalyticsHandlers(bot, deps)
+registerTaskHandlers(bot, deps)
 registerSystemHandlers(bot, deps)
 registerContentHandlers(bot, deps)
 
@@ -124,9 +127,42 @@ async function tickDailyBackup() {
   }
 }
 
+// ===== E34/E35 — Autonomous Watchers (каждые 15 минут) =====
+// Прогон наблюдателей: авто-генерация задач (E33) + рассылка новых тревог (E35).
+async function tickWatchers() {
+  try {
+    const { tasks, alerts } = await runWatchers()
+    // Smart Alerts — каждую новую тревогу шлём админам.
+    for (const a of alerts) {
+      for (const id of config.adminIds) {
+        try {
+          await bot.api.sendMessage(id, a.text)
+        } catch {
+          /* пропускаем недоставленные */
+        }
+      }
+    }
+    // Авто-созданные задачи — одной сводкой.
+    if (tasks.length) {
+      const text = '🤖 AI Director создал задачи:\n\n' + tasks.map((t) => `• ${t.title}`).join('\n')
+      for (const id of config.adminIds) {
+        try {
+          await bot.api.sendMessage(id, text)
+        } catch {
+          /* пропускаем */
+        }
+      }
+      await logEvent({ userId: 'system', action: 'tasks_generated', details: `${tasks.length} task(s)` })
+    }
+  } catch {
+    /* не валим планировщик */
+  }
+}
+
 setInterval(tickReminders, 60_000)
 setInterval(tickDailyReport, 60_000)
 setInterval(tickDailyBackup, 60_000)
+setInterval(tickWatchers, 15 * 60_000)
 
 // ===== E8 — приём заявок с сайта + мгновенное уведомление админов =====
 async function notifyLead(lead) {

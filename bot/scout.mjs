@@ -264,13 +264,90 @@ export async function getFleetStats() {
   let engineOn = 0
   let offline = 0
   let fuelKnown = 0
+  let idling = 0
   const noFuel = []
+  const noDriver = []
   for (const u of units) {
-    if (u.isEngineWorking === true) engineOn++
+    if (u.isEngineWorking === true) {
+      engineOn++
+      if ((u.speed ?? 0) === 0) idling++ // двигатель работает, скорость 0 → простой
+    }
     const age = ageMinutes(u.date)
     if (age == null || age >= offlineMinutes) offline++
     if (typeof u.fuelLevel === 'number') fuelKnown++
     else noFuel.push(u.name)
+    if (!u.driverName) noDriver.push(u.name)
   }
-  return { total, count: units.length, engineOn, offline, fuelKnown, noFuel, offlineMinutes }
+  return { total, count: units.length, engineOn, offline, fuelKnown, noFuel, noDriver, idling, offlineMinutes }
+}
+
+// ===== E29 — Transport Intelligence (read-only) =====
+const engineMark = (v) => (v === true ? 'ON' : v === false ? 'OFF' : '—')
+
+/** /scout_drivers — кто за рулём каждой машины. */
+export async function formatDrivers() {
+  const { units } = await getScoutFleet()
+  if (!units.length) return '🚚 Нет данных по парку.'
+  return units.map((u) => `🚚 ${u.name}\n👨 ${u.driverName || 'Не назначен'}`).join('\n\n')
+}
+
+/** /scout_engine — группировка по состоянию двигателя. */
+export async function formatEngine() {
+  const { units } = await getScoutFleet()
+  const on = units.filter((u) => u.isEngineWorking === true)
+  const off = units.filter((u) => u.isEngineWorking !== true)
+  const block = (arr) => (arr.length ? arr.map((u) => `🚚 ${u.name}`).join('\n') : '—')
+  return (
+    '🟢 Двигатель включён\n\n' + block(on) + '\n\n🔴 Двигатель выключен\n\n' + block(off)
+  )
+}
+
+/** /scout_parking — стоящие машины (скорость 0). */
+export async function formatParking() {
+  const { units } = await getScoutFleet()
+  const parked = units.filter((u) => (u.speed ?? 0) === 0)
+  if (!parked.length) return '🅿️ Стоящих машин нет (все в движении).'
+  return (
+    '🅿️ Стоят\n\n' +
+    parked
+      .map(
+        (u) =>
+          `🚚 ${u.name}\nДвигатель: ${engineMark(u.isEngineWorking)} · ${u.driverName || 'без водителя'}`,
+      )
+      .join('\n\n')
+  )
+}
+
+/** /scout_map_all — все машины со ссылками на карту. */
+export async function formatMapAll() {
+  const { units } = await getScoutFleet()
+  if (!units.length) return '🚚 Нет данных по парку.'
+  return units
+    .map((u) => `🚚 ${u.name}\n📍 ${googleMapsLink(u.latitude, u.longitude) ?? 'нет координат'}`)
+    .join('\n\n')
+}
+
+/** Сырые тревоги парка: offline / нет топлива / старые данные / нет водителя. */
+export async function getScoutAlerts() {
+  const { offlineMinutes } = getScoutConfig()
+  const { units } = await getScoutFleet()
+  const alerts = []
+  for (const u of units) {
+    if (typeof u.fuelLevel !== 'number') alerts.push({ name: u.name, msg: 'Нет датчика топлива' })
+    const age = ageMinutes(u.date)
+    if (age == null) alerts.push({ name: u.name, msg: 'Нет данных GPS' })
+    else if (age >= offlineMinutes) {
+      const hrs = Math.floor(age / 60)
+      alerts.push({ name: u.name, msg: hrs >= 1 ? `Не обновлялась ${hrs} ч` : `Offline ${age} мин` })
+    }
+    if (!u.driverName) alerts.push({ name: u.name, msg: 'Водитель не назначен' })
+  }
+  return alerts
+}
+
+/** /scout_alerts — отформатированные тревоги. */
+export async function formatAlerts() {
+  const alerts = await getScoutAlerts()
+  if (!alerts.length) return '✅ Тревог нет — парк в норме.'
+  return '⚠️ Тревоги транспорта\n\n' + alerts.map((a) => `⚠️ ${a.name}\n${a.msg}`).join('\n\n')
 }

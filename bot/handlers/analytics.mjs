@@ -2,6 +2,7 @@
 // /report (AI Director), /dashboard (Control Center). Поведение идентично.
 import { getOverview, getTopPages, getTrafficSources, getConversion } from '../analytics.mjs'
 import { directorReport } from '../director.mjs'
+import { analyzeBusiness, ceoReport } from '../operations.mjs'
 import { getFleetStats } from '../scout.mjs'
 import { readPrices } from '../prices.mjs'
 import { readLeads, leadStats } from '../leads.mjs'
@@ -110,14 +111,48 @@ export function registerAnalyticsHandlers(bot, deps) {
     }
   })
 
-  // ===== E25 — AI Director (/report) =====
+  // ===== E25/E31.5 — AI Director (/report) — использует CRM+Scout+Analytics+Content+Site =====
   command('report', async (ctx) => {
     try {
       await logEvent({ userId: ctx.from.id, action: 'director_report', details: 'manual /report' })
-      const { text } = await directorReport()
-      await ctx.reply(text)
+      const [{ text }, b] = await Promise.all([directorReport(), analyzeBusiness().catch(() => null)])
+      let out = text
+      if (b) out += `\n\n——————————————\nCEO Score: ${b.ceoScore}/100 · Приоритет: ${b.priority}`
+      await ctx.reply(out)
     } catch (err) {
       await ctx.reply(`❌ /report недоступен\nОшибка: ${err.message}`)
+    }
+  })
+
+  // ===== E30 — Operations Director (/operations) =====
+  command('operations', async (ctx) => {
+    try {
+      await logEvent({ userId: ctx.from.id, action: 'operations_view', details: 'operations' })
+      const b = await analyzeBusiness()
+      const line = (probs, okText) =>
+        probs.length ? `⚠️ ${probs[0]}${probs.length > 1 ? ` (+${probs.length - 1})` : ''}` : `🟢 ${okText}`
+      await ctx.reply(
+        '🏢 Operations Director\n\n' +
+          `CRM:\n${line(b.crm.problems, 'заявки под контролем')}\n\n` +
+          `Транспорт:\n${b.fleet.configured === false ? '⚪ СКАУТ не подключён' : line(b.fleet.problems, 'парк в норме')}\n\n` +
+          `Контент:\n${line(b.content.problems, 'актуален')}\n\n` +
+          `Сайт:\n${b.site.ok ? '🟢 Работает' : '🔴 Недоступен'}\n\n` +
+          `CEO Score: ${b.ceoScore}/100\n` +
+          `Приоритет:\n${b.priority}`,
+      )
+    } catch (err) {
+      await ctx.reply(`❌ /operations недоступен\nОшибка: ${err.message}`)
+    }
+  })
+
+  // ===== E31 — Daily CEO Report (/ceo_report) =====
+  command('ceo_report', async (ctx) => {
+    try {
+      await logEvent({ userId: ctx.from.id, action: 'ceo_report_view', details: 'manual' })
+      const { text } = await ceoReport()
+      await ctx.reply(text)
+    } catch (err) {
+      await ctx.reply(`❌ /ceo_report недоступен\nОшибка: ${err.message}`)
     }
   })
 
@@ -125,7 +160,7 @@ export function registerAnalyticsHandlers(bot, deps) {
   command('dashboard', async (ctx) => {
     try {
       await logEvent({ userId: ctx.from.id, action: 'dashboard_view', details: 'control center' })
-      const [h, p, s, leadsData, reminders, newsList, promoList, v, backups, lastDep, lastEv, fleet] =
+      const [h, p, s, leadsData, reminders, newsList, promoList, v, backups, lastDep, lastEv, fleet, ops] =
         await Promise.all([
           checkHealth(),
           readPrices().catch(() => ({})),
@@ -139,6 +174,7 @@ export function registerAnalyticsHandlers(bot, deps) {
           lastEventMatching(['deploy', 'publish', 'price_update']).catch(() => null),
           lastEvent().catch(() => null),
           getFleetStats().catch(() => ({ error: true })),
+          analyzeBusiness().catch(() => null),
         ])
 
       const stationCount = p.stations ? Object.keys(p.stations).length : 0
@@ -184,6 +220,8 @@ export function registerAnalyticsHandlers(bot, deps) {
           `Новости: ${newsList.length}\n` +
           `Акции: ${promoList.length}\n\n` +
           `${fleetBlock}\n\n` +
+          `CEO Score: ${ops ? `${ops.ceoScore}/100` : '—'}\n` +
+          `Operations: ${ops ? ops.priority : '—'}\n\n` +
           `Последний deploy: ${lastDeployLine}\n` +
           `Последний backup: ${lastBackupName}\n` +
           `Последний audit: ${lastAuditLine}\n\n` +

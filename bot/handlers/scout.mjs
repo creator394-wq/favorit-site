@@ -8,6 +8,11 @@ import {
   formatTruckCard,
   formatFuelReport,
   formatOfflineReport,
+  formatDrivers,
+  formatEngine,
+  formatParking,
+  formatMapAll,
+  formatAlerts,
   googleMapsLink,
 } from '../scout.mjs'
 import { logEvent } from '../audit.mjs'
@@ -122,6 +127,48 @@ export function registerScoutHandlers(bot, deps) {
       await ctx.reply((await formatOfflineReport()).slice(0, 3800))
     } catch (err) {
       await ctx.reply(`❌ /scout_offline недоступен\nОшибка: ${err.message}`)
+    }
+  })
+
+  // ===== E29 — Transport Intelligence =====
+
+  // Общий шаблон команды парка: гард на конфиг + try/catch.
+  const fleetCommand = (name, fn) =>
+    command(name, async (ctx) => {
+      try {
+        if (!isScoutConfigured()) {
+          await ctx.reply(SCOUT_NOT_CONFIGURED)
+          return
+        }
+        await ctx.reply((await fn()).slice(0, 3800))
+      } catch (err) {
+        await ctx.reply(`❌ /${name} недоступен\nОшибка: ${err.message}`)
+      }
+    })
+
+  // --- /scout_drivers ---
+  fleetCommand('scout_drivers', () => formatDrivers().then((t) => '🚚 Водители\n\n' + t))
+
+  // --- /scout_engine ---
+  fleetCommand('scout_engine', formatEngine)
+
+  // --- /scout_parking ---
+  fleetCommand('scout_parking', formatParking)
+
+  // --- /scout_map_all ---
+  fleetCommand('scout_map_all', () => formatMapAll().then((t) => '🗺 Карта парка\n\n' + t))
+
+  // --- /scout_alerts ---
+  command('scout_alerts', async (ctx) => {
+    try {
+      await logEvent({ userId: ctx.from.id, action: 'scout_alerts_view', details: 'alerts' })
+      if (!isScoutConfigured()) {
+        await ctx.reply(SCOUT_NOT_CONFIGURED)
+        return
+      }
+      await ctx.reply((await formatAlerts()).slice(0, 3800))
+    } catch (err) {
+      await ctx.reply(`❌ /scout_alerts недоступен\nОшибка: ${err.message}`)
     }
   })
 }

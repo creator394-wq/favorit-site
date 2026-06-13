@@ -6,7 +6,7 @@
 import { Bot } from 'grammy'
 import { config, isAdmin } from './config.mjs'
 import { popDueReminders } from './reminders.mjs'
-import { dailyReport } from './director.mjs'
+import { ceoReport } from './operations.mjs'
 import { createBackup } from './backup.mjs'
 import { logEvent } from './audit.mjs'
 import { startLeadApi } from './leadApi.mjs'
@@ -88,9 +88,9 @@ async function tickDailyReport() {
     const now = new Date()
     if (now.getHours() === 8 && now.getDate() !== lastDailyReportDay) {
       lastDailyReportDay = now.getDate()
-      // E25 — Daily Business Report от AI Director.
-      const { text } = await dailyReport()
-      await logEvent({ userId: 'system', action: 'director_report', details: 'daily 08:00' })
+      // E31 — Daily CEO Report (08:00).
+      const { text } = await ceoReport()
+      await logEvent({ userId: 'system', action: 'daily_report_sent', details: 'CEO report 08:00' })
       for (const id of config.adminIds) {
         try {
           await bot.api.sendMessage(id, text)

@@ -121,7 +121,17 @@ const SECTIONS = {
         .row()
         .text('📈 Конверсия', 'menu:act:conversion')
         .row()
-        .text('🧠 AI отчёт', 'menu:act:report'),
+        .text('🧠 AI отчёт', 'menu:act:report')
+        .row()
+        .text('🏢 Operations Director', 'menu:act:operations')
+        .row()
+        .text('👔 CEO Report', 'menu:act:ceo_report')
+        .row()
+        .text('🚚 Scout Alerts', 'menu:act:scout_alerts')
+        .row()
+        .text('🚚 Drivers', 'menu:act:scout_drivers')
+        .row()
+        .text('🚚 Engines', 'menu:act:scout_engine'),
     ),
   reliability: () =>
     withBack(

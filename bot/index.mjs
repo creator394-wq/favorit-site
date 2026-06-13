@@ -8,6 +8,7 @@ import { config, isAdmin } from './config.mjs'
 import { popDueReminders } from './reminders.mjs'
 import { ceoReport } from './operations.mjs'
 import { runWatchers } from './watchers.mjs'
+import { finalizeIdleTopazSessions } from './topaz.mjs'
 import { createBackup } from './backup.mjs'
 import { logEvent } from './audit.mjs'
 import { startLeadApi } from './leadApi.mjs'
@@ -19,6 +20,7 @@ import { registerLeadHandlers } from './handlers/leads.mjs'
 import { registerScoutHandlers } from './handlers/scout.mjs'
 import { registerAnalyticsHandlers } from './handlers/analytics.mjs'
 import { registerTaskHandlers } from './handlers/tasks.mjs'
+import { registerTopazIntake, registerTopazHandlers } from './handlers/topaz.mjs'
 import { registerSystemHandlers } from './handlers/system.mjs'
 import { registerContentHandlers } from './handlers/content.mjs'
 
@@ -38,6 +40,11 @@ function command(name, handler) {
 const pending = new Map() // ожидающие подтверждения операции по userId
 const flows = new Map() // активные пошаговые сценарии (news/promo/content) по userId
 const deps = { command, cmdHandlers, pending, flows }
+
+// --- E41-A — Topaz photo intake. РЕГИСТРИРУЕТСЯ ДО allowlist: фото шлют операторы,
+// которых НЕТ в TELEGRAM_ADMIN_IDS. Обрабатываются только фото из TOPAZ_GROUP_ID,
+// всё прочее пропускается дальше (next) — на общий allowlist-гард. ---
+registerTopazIntake(bot)
 
 // --- Глобальный allowlist-гард: чужих молча игнорируем (ДО всех обработчиков). ---
 bot.use(async (ctx, next) => {
@@ -59,6 +66,7 @@ registerLeadHandlers(bot, deps)
 registerScoutHandlers(bot, deps)
 registerAnalyticsHandlers(bot, deps)
 registerTaskHandlers(bot, deps)
+registerTopazHandlers(bot, deps)
 registerSystemHandlers(bot, deps)
 registerContentHandlers(bot, deps)
 
@@ -159,10 +167,20 @@ async function tickWatchers() {
   }
 }
 
+// ===== E41-A — авто-финализация idle-сессий Топаз (collecting → ready) =====
+async function tickTopaz() {
+  try {
+    await finalizeIdleTopazSessions(bot)
+  } catch {
+    /* не валим планировщик */
+  }
+}
+
 setInterval(tickReminders, 60_000)
 setInterval(tickDailyReport, 60_000)
 setInterval(tickDailyBackup, 60_000)
 setInterval(tickWatchers, 15 * 60_000)
+setInterval(tickTopaz, 60_000)
 
 // ===== E8 — приём заявок с сайта + мгновенное уведомление админов =====
 async function notifyLead(lead) {

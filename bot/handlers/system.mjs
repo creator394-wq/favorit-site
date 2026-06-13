@@ -19,6 +19,15 @@ const auditLine = (e) => `${formatRu(e.createdAt)} · ${e.action}\n${e.details |
 export function registerSystemHandlers(bot, deps) {
   const { command, pending } = deps
 
+  // --- /chatid (временная диагностика; доступ — только allowlist-админам) ---
+  command('chatid', async (ctx) => {
+    await ctx.reply(
+      `Chat ID: ${ctx.chat.id}\n` +
+        `Chat Type: ${ctx.chat.type}\n` +
+        `Chat Title: ${ctx.chat.title ?? '—'}`,
+    )
+  })
+
   // --- /deploy (ручной, прямой вызов runDeploy) ---
   command('deploy', async (ctx) => {
     try {

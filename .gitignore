@@ -47,3 +47,5 @@ docs/obsidian/
 # E22 — Audit log + backups: операционные данные бота, меняются постоянно.
 # Якорь /data/ (только корень) — НЕ затрагивает tracked-файлы в src/data/.
 /data/
+# E41-A — сессии приёма фото Топаз (явно; уже покрыто якорем /data/ выше).
+data/topaz_sessions.json

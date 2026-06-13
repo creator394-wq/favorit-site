@@ -46,6 +46,9 @@ const HELP_TEXT =
   '/operations · /ceo_report · /alerts\n' +
   '/tasks · /task_new <текст> · /task_view <id>\n' +
   '/task_done <id> · /task_cancel <id>\n\n' +
+  'Топаз (приём фото-отчётов из группы, E41-A):\n' +
+  '/topaz_status · /topaz_sessions · /topaz_view <id>\n' +
+  '/topaz_process <id> · /topaz_cancel <id>\n\n' +
   'Проектная память: /docs · /roadmap · /session_log <текст>\n\n' +
   'Аудит и бэкапы:\n' +
   '/audit · /audit_last · /audit_search <слово>\n' +
@@ -60,6 +63,8 @@ function mainMenuKb() {
     .text('🏢 Дашборд', 'menu:act:dashboard')
     .row()
     .text('🤖 AI Director', 'menu:sec:ai')
+    .row()
+    .text('🧾 Топаз', 'menu:sec:topaz')
     .row()
     .text('⛽ Цены АЗС', 'menu:sec:prices')
     .text('📞 Заявки / CRM', 'menu:sec:crm')
@@ -87,6 +92,13 @@ const SECTIONS = {
         .text('👔 CEO Report', 'menu:act:ceo_report')
         .row()
         .text('📊 Executive Dashboard', 'menu:act:dashboard'),
+    ),
+  topaz: () =>
+    withBack(
+      new InlineKeyboard()
+        .text('🧾 Статус Топаз', 'menu:act:topaz_status')
+        .row()
+        .text('📂 Сессии', 'menu:act:topaz_sessions'),
     ),
   prices: () =>
     withBack(
@@ -179,6 +191,7 @@ const SECTIONS = {
 
 const SECTION_TITLES = {
   ai: '🤖 AI Director',
+  topaz: '🧾 Топаз (МАЗС Камышлов)',
   prices: '⛽ Цены АЗС',
   crm: '📞 Заявки / CRM',
   transport: '🚚 Транспорт',

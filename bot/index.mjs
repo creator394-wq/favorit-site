@@ -29,6 +29,7 @@ import { startLeadApi } from './leadApi.mjs'
 import { parseWhen, addReminder, listReminders, cancelReminder, popDueReminders } from './reminders.mjs'
 import { news, promos, trucks, maintenance } from './collections.mjs'
 import { prepareContentEdit, writeContacts, CONTACTS_REL } from './content.mjs'
+import { docsHelp, readRoadmap, appendSessionLog } from './docs.mjs'
 
 const LABELS = { ai92: 'АИ-92', ai95: 'АИ-95', dt: 'ДТ', gas: 'СУГ' }
 
@@ -335,7 +336,8 @@ const HELP_TEXT =
   '/promo_create /promo_list /promo_delete <id> · /content\n\n' +
   'Транспорт: /trucks /truck_add /truck_edit /truck_delete\n' +
   'ТО: /maintenance /maintenance_add /maintenance_done <id>\n\n' +
-  'Аналитика: /analytics /report /dashboard'
+  'Аналитика: /analytics /report /dashboard\n\n' +
+  'Проектная память: /docs · /roadmap · /session_log <текст>'
 
 // --- /help ---
 bot.command('help', async (ctx) => {
@@ -922,6 +924,52 @@ bot.command('dashboard', async (ctx) => {
     )
   } catch (err) {
     await ctx.reply(`❌ /dashboard недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// ===== E21 — Obsidian Project Memory =====
+
+// --- /docs (справка по проектной памяти) ---
+bot.command('docs', async (ctx) => {
+  try {
+    await ctx.reply(await docsHelp())
+  } catch (err) {
+    await ctx.reply(`❌ /docs недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /roadmap (краткий план из ROADMAP.md) ---
+bot.command('roadmap', async (ctx) => {
+  try {
+    const raw = await readRoadmap()
+    if (!raw.trim()) {
+      await ctx.reply('Roadmap пуст или не найден (docs/obsidian/FAVORIT_SITE_ROADMAP.md).')
+      return
+    }
+    // Убираем YAML-фронтматтер для краткого вывода.
+    const body = raw.replace(/^---\n[\s\S]*?\n---\n/, '').trim()
+    await ctx.reply('🗺 Roadmap\n\n' + body.slice(0, 3500))
+  } catch (err) {
+    await ctx.reply(`❌ /roadmap недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /session_log <текст> (добавить запись в CHANGELOG) ---
+bot.command('session_log', async (ctx) => {
+  try {
+    const text = (ctx.match ?? '').trim()
+    if (!text) {
+      await ctx.reply('Формат: /session_log <текст>')
+      return
+    }
+    const r = await appendSessionLog(text)
+    if (!r.ok) {
+      await ctx.reply(`❌ ${r.error}`)
+      return
+    }
+    await ctx.reply(`✅ Записано в ${r.file}\n## ${r.when}\n${text}`)
+  } catch (err) {
+    await ctx.reply(`❌ /session_log недоступен\nОшибка: ${err.message}`)
   }
 })
 

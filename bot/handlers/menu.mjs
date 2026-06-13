@@ -46,9 +46,12 @@ const HELP_TEXT =
   '/operations · /ceo_report · /alerts\n' +
   '/tasks · /task_new <текст> · /task_view <id>\n' +
   '/task_done <id> · /task_cancel <id>\n\n' +
-  'Топаз (приём фото-отчётов из группы, E41-A):\n' +
+  'Топаз (приём фото-отчётов из группы, E41-A/B):\n' +
   '/topaz_status · /topaz_sessions · /topaz_view <id>\n' +
+  '/topaz_ocr <id> — распознать отчёт (OCR)\n' +
   '/topaz_process <id> · /topaz_cancel <id>\n\n' +
+  'Сводки по АЗС (E42):\n' +
+  '/report_today · /report_yesterday · /report_last\n\n' +
   'Проектная память: /docs · /roadmap · /session_log <текст>\n\n' +
   'Аудит и бэкапы:\n' +
   '/audit · /audit_last · /audit_search <слово>\n' +
@@ -98,7 +101,11 @@ const SECTIONS = {
       new InlineKeyboard()
         .text('🧾 Статус Топаз', 'menu:act:topaz_status')
         .row()
-        .text('📂 Сессии', 'menu:act:topaz_sessions'),
+        .text('📂 Сессии', 'menu:act:topaz_sessions')
+        .row()
+        .text('📊 Сводка сегодня', 'menu:act:report_today')
+        .row()
+        .text('📊 Последняя смена', 'menu:act:report_last'),
     ),
   prices: () =>
     withBack(

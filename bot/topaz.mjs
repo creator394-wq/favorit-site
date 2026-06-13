@@ -177,6 +177,17 @@ export async function processTopazSession(idOrPrefix) {
   return r
 }
 
+/** E41-B — сохранить результат OCR в сессию (аддитивно, без смены статуса). */
+export async function setTopazOcr(idOrPrefix, ocr) {
+  const d = await readStore()
+  const s = d.sessions.find((x) => matches(x, idOrPrefix))
+  if (!s) return { ok: false, error: 'сессия не найдена' }
+  s.ocr = ocr
+  s.updatedAt = nowIso()
+  await writeStore(d)
+  return { ok: true, session: s }
+}
+
 /** Inline-клавиатура управления сессией (для ready-уведомления и просмотра). */
 export function topazSessionKeyboard(id) {
   return new InlineKeyboard()

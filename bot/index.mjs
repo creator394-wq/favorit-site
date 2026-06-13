@@ -8,7 +8,8 @@ import { config, isAdmin } from './config.mjs'
 import { popDueReminders } from './reminders.mjs'
 import { ceoReport } from './operations.mjs'
 import { runWatchers } from './watchers.mjs'
-import { finalizeIdleTopazSessions } from './topaz.mjs'
+import { finalizeIdleTopazSessions, getTopazAdminChatId } from './topaz.mjs'
+import { morningReportText } from './reports.mjs'
 import { createBackup } from './backup.mjs'
 import { logEvent } from './audit.mjs'
 import { startLeadApi } from './leadApi.mjs'
@@ -176,11 +177,31 @@ async function tickTopaz() {
   }
 }
 
+// ===== E42 — Morning CEO Report (08:10 → TOPAZ_ADMIN_CHAT_ID) =====
+// Тот же паттерн, что и daily report 08:00: тик раз в минуту + дневной гард.
+let lastMorningReportDay = -1
+async function tickMorningReport() {
+  try {
+    const now = new Date()
+    if (now.getHours() === 8 && now.getMinutes() >= 10 && now.getDate() !== lastMorningReportDay) {
+      lastMorningReportDay = now.getDate()
+      const adminChatId = getTopazAdminChatId()
+      if (!adminChatId) return // не настроен — тихо пропускаем
+      const text = await morningReportText()
+      await bot.api.sendMessage(adminChatId, text).catch(() => {})
+      await logEvent({ userId: 'system', action: 'morning_report_sent', details: '08:10 CEO report' })
+    }
+  } catch {
+    /* не валим планировщик */
+  }
+}
+
 setInterval(tickReminders, 60_000)
 setInterval(tickDailyReport, 60_000)
 setInterval(tickDailyBackup, 60_000)
 setInterval(tickWatchers, 15 * 60_000)
 setInterval(tickTopaz, 60_000)
+setInterval(tickMorningReport, 60_000)
 
 // ===== E8 — приём заявок с сайта + мгновенное уведомление админов =====
 async function notifyLead(lead) {

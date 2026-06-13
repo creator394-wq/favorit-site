@@ -49,3 +49,5 @@ docs/obsidian/
 /data/
 # E41-A — сессии приёма фото Топаз (явно; уже покрыто якорем /data/ выше).
 data/topaz_sessions.json
+# E42 — реестр подтверждённых смен Топаз (доходы). Явно; покрыто /data/.
+data/topaz_ledger.json

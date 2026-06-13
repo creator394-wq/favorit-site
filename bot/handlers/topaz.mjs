@@ -19,7 +19,12 @@ import {
   formatTopazSessionNotice,
   formatTopazSessionCard,
   topazShortId,
+  setTopazOcr,
 } from '../topaz.mjs'
+import { ocrTopazSession } from '../topazOcr.mjs'
+import { parseTopazReport, formatTopazStructured } from '../topazParser.mjs'
+import { addShift, reportToday, reportYesterday, reportLast } from '../reports.mjs'
+import { logEvent } from '../audit.mjs'
 
 // ===== 1) Приём фото из группы (до allowlist) =====
 export function registerTopazIntake(bot) {
@@ -135,11 +140,105 @@ export function registerTopazHandlers(bot, deps) {
         await ctx.reply(`❌ ${r.error}`)
         return
       }
-      await ctx.reply('📦 Сессия переведена в processed (OCR будет в E41-B)\n\n' + formatTopazSessionCard(r.session))
+      // E42 — если есть распознанный отчёт, сохраняем смену в ledger (без дублей).
+      let ledgerNote = ''
+      const structured = r.session.ocr?.structured
+      if (structured) {
+        const add = await addShift({ structured, sourceSessionId: r.session.id }).catch(() => ({ created: false }))
+        if (add.created) {
+          ledgerNote = `\n\n🧾 Смена № ${structured.shiftNumber ?? '—'} сохранена в ledger.`
+          await logEvent({
+            userId: ctx.from.id,
+            action: 'topaz_shift_saved',
+            details: `shift ${structured.shiftNumber ?? '—'} · ${structured.station ?? '—'} · session ${topazShortId(r.session.id)}`,
+          })
+        } else {
+          ledgerNote = '\n\nℹ️ Смена уже была в ledger (дубль не создан).'
+        }
+      } else {
+        ledgerNote = '\n\nℹ️ Нет распознанных данных (сначала /topaz_ocr) — в ledger не записано.'
+      }
+      await ctx.reply('📦 Сессия переведена в processed\n\n' + formatTopazSessionCard(r.session) + ledgerNote)
     } catch (err) {
       await ctx.reply(`❌ /topaz_process недоступен\nОшибка: ${err.message}`)
     }
   })
+
+  // --- /topaz_ocr <id> (ручной запуск OCR; авто-OCR на этом этапе НЕ делаем) ---
+  command('topaz_ocr', async (ctx) => {
+    const id = (ctx.match ?? '').trim()
+    if (!id) {
+      await ctx.reply('Использование: /topaz_ocr <id>\n(id — слева в /topaz_sessions)')
+      return
+    }
+    const session = await getTopazSession(id)
+    if (!session) {
+      await ctx.reply('❌ Сессия не найдена.')
+      return
+    }
+    if (!session.photoCount) {
+      await ctx.reply('❌ В сессии нет фото для распознавания.')
+      return
+    }
+    await logEvent({
+      userId: ctx.from.id,
+      action: 'topaz_ocr_started',
+      details: `session ${topazShortId(session.id)} · ${session.photoCount} photo`,
+    })
+    await ctx.reply(
+      `🔍 Запускаю OCR по сессии ${topazShortId(session.id)} (${session.photoCount} фото)…\n` +
+        'Скачиваю и распознаю — это может занять до минуты.',
+    )
+    try {
+      const ocr = await ocrTopazSession(bot, session)
+      // E41-B3 — структурный парсинг поверх OCR-текста (отдельный модуль).
+      const structured = parseTopazReport(ocr.rawText)
+      ocr.structured = structured
+      await setTopazOcr(session.id, ocr)
+      // Аудит без полного текста отчёта: только метрики (OCR + парсер).
+      await logEvent({
+        userId: ctx.from.id,
+        action: 'topaz_ocr_completed',
+        details: `session ${topazShortId(session.id)} · ocr ${ocr.confidence}% · parser ${structured.confidence}% · chars ${ocr.rawText.length}`,
+      })
+      const preview = (ocr.rawText || '')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .slice(0, 6)
+        .join('\n')
+      const msg =
+        '🧾 OCR Отчёт Топаз\n\n' +
+        `Сессия: ${topazShortId(session.id)}\n` +
+        `Фото: ${session.photoCount}\n` +
+        `Уверенность OCR: ${ocr.confidence}%\n\n` +
+        formatTopazStructured(structured) +
+        '\n\nПредпросмотр:\n' +
+        (preview || '—')
+      await ctx.reply(msg.slice(0, 3800))
+    } catch (err) {
+      await logEvent({
+        userId: ctx.from.id,
+        action: 'topaz_ocr_failed',
+        details: `session ${topazShortId(session.id)} · ${err.message}`,
+      })
+      await ctx.reply(`❌ OCR не удался\nОшибка: ${err.message}`)
+    }
+  })
+
+  // ===== E42 — Morning CEO Report (только админы) =====
+  const reportCmd = (name, fn, audit) =>
+    command(name, async (ctx) => {
+      try {
+        await logEvent({ userId: ctx.from.id, action: audit, details: name })
+        await ctx.reply((await fn()).slice(0, 3900))
+      } catch (err) {
+        await ctx.reply(`❌ /${name} недоступен\nОшибка: ${err.message}`)
+      }
+    })
+  reportCmd('report_today', reportToday, 'report_today_view')
+  reportCmd('report_yesterday', reportYesterday, 'report_yesterday_view')
+  reportCmd('report_last', reportLast, 'report_last_view')
 
   // ===== Callbacks (только админы — за allowlist) =====
   // --- topaz:view:<id> ---

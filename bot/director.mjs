@@ -8,6 +8,7 @@ import { news, promos } from './collections.mjs'
 import { listReminders } from './reminders.mjs'
 import { checkHealth } from './monitor.mjs'
 import { getOverview } from './analytics.mjs'
+import { getFleetStats } from './scout.mjs'
 
 const DAY = 86400000
 const OPEN_STATUSES = ['new', 'in_progress', 'callback']
@@ -24,15 +25,17 @@ function daysSince(iso) {
 /** Собрать все метрики и вывести проблемы/рекомендации. */
 async function gather() {
   const safe = (p, fallback) => p.then((v) => v).catch(() => fallback)
-  const [stats, leadsData, newsList, promoList, reminders, health, overview] = await Promise.all([
-    safe(leadStats(), { total: 0, today: 0, week: 0, conversion: 0, byStatus: {} }),
-    safe(readLeads(), { leads: [] }),
-    safe(news.list(), []),
-    safe(promos.list(), []),
-    safe(listReminders(), []),
-    safe(checkHealth(), { ok: false }),
-    safe(getOverview(7), null),
-  ])
+  const [stats, leadsData, newsList, promoList, reminders, health, overview, fleet] =
+    await Promise.all([
+      safe(leadStats(), { total: 0, today: 0, week: 0, conversion: 0, byStatus: {} }),
+      safe(readLeads(), { leads: [] }),
+      safe(news.list(), []),
+      safe(promos.list(), []),
+      safe(listReminders(), []),
+      safe(checkHealth(), { ok: false }),
+      safe(getOverview(7), null),
+      safe(getFleetStats(), null), // null = СКАУТ не подключён или API недоступен
+    ])
   const byStatus = {
     new: stats.byStatus?.new ?? 0,
     in_progress: stats.byStatus?.in_progress ?? 0,
@@ -70,6 +73,12 @@ async function gather() {
   if (byStatus.new > 0) problems.push(`${byStatus.new} необработанных заявок`)
   if (byStatus.callback > 0) problems.push(`${byStatus.callback} ждут перезвона`)
   if (stats.total >= 5 && stats.conversion < 30) problems.push(`низкая конверсия ${stats.conversion}%`)
+  // E26 — транспорт (СКАУТ). fleet=null → не подключён/недоступен, блок пропускаем.
+  if (fleet) {
+    if (fleet.offline > 0) problems.push(`транспорт: ${fleet.offline} машин(ы) давно не обновлялись`)
+    if (fleet.noFuel.length > 0)
+      problems.push(`транспорт: ${fleet.noFuel.length} машин(ы) без датчика топлива`)
+  }
 
   const recommendations = []
   if (!health.ok) recommendations.push('Проверить доступность сайта (/health)')
@@ -78,6 +87,10 @@ async function gather() {
   if (!promoList.length) recommendations.push('Опубликовать акцию (/promo_create)')
   if (staleCount > 0 || byStatus.new > 0 || byStatus.callback > 0)
     recommendations.push('Перезвонить клиентам (/leads, /lead_work)')
+  if (fleet && fleet.noFuel.length > 0)
+    recommendations.push(`Проверить датчики топлива: ${fleet.noFuel.slice(0, 5).join(', ')}`)
+  if (fleet && fleet.offline > 0)
+    recommendations.push('Проверить связь с offline-машинами (/scout_offline)')
   if (!recommendations.length)
     recommendations.push('Всё под контролем — критичных действий не требуется')
 
@@ -88,12 +101,25 @@ async function gather() {
     remindersCount: reminders.length,
     health,
     overview,
+    fleet,
     newsAge,
     staleCount,
     staleMax,
     problems,
     recommendations,
   }
+}
+
+/** Текстовый блок транспорта для отчётов (или '' если СКАУТ не подключён). */
+function transportSection(fleet) {
+  if (!fleet) return ''
+  return (
+    'Транспорт:\n' +
+    `${fleet.total} машин(ы)\n` +
+    `${fleet.engineOn} с включённым двигателем\n` +
+    `${fleet.offline} давно не обновлялись\n` +
+    `${fleet.noFuel.length} без датчика топлива\n\n`
+  )
 }
 
 const bullets = (arr) => (arr.length ? arr.map((p) => `- ${p}`).join('\n') : '- не выявлено')
@@ -107,6 +133,7 @@ export async function directorReport() {
     `Лидов за неделю:\n${g.stats.week}\n\n` +
     `Закрыто:\n${g.stats.byStatus.closed}\n\n` +
     `Конверсия:\n${g.stats.conversion}%\n\n` +
+    transportSection(g.fleet) +
     'Проблемы:\n' +
     bullets(g.problems) +
     '\n\n' +
@@ -125,6 +152,7 @@ export async function dailyReport() {
     `Заявки:\nсегодня ${s.today} · неделя ${s.week} · всего ${s.total}\n\n` +
     `Лиды:\nnew ${s.byStatus.new} · work ${s.byStatus.in_progress} · callback ${s.byStatus.callback} · closed ${s.byStatus.closed} · reject ${s.byStatus.rejected}\n\n` +
     `Конверсия:\n${s.conversion}%\n\n` +
+    transportSection(g.fleet) +
     'Проблемы:\n' +
     bullets(g.problems) +
     '\n\n' +

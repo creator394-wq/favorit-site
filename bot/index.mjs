@@ -47,6 +47,17 @@ import {
   getAnalyticsConfig,
 } from './analytics.mjs'
 import { directorReport, dailyReport } from './director.mjs'
+import {
+  isScoutConfigured,
+  findScoutUnit,
+  formatFleetSummary,
+  formatFleet,
+  formatTruckCard,
+  formatFuelReport,
+  formatOfflineReport,
+  googleMapsLink,
+  getFleetStats,
+} from './scout.mjs'
 
 const LABELS = { ai92: 'АИ-92', ai95: 'АИ-95', dt: 'ДТ', gas: 'СУГ' }
 
@@ -357,6 +368,9 @@ const HELP_TEXT =
   'Аналитика и бизнес:\n' +
   '/analytics · /top_pages · /sources · /conversion\n' +
   '/dashboard — Control Center · /report — отчёт директора\n\n' +
+  'Автопарк (СКАУТ):\n' +
+  '/scout_status · /scout_fleet (/fleet) · /scout_truck <id|номер>\n' +
+  '/scout_fuel · /scout_map <id|номер> · /scout_offline\n\n' +
   'Проектная память: /docs · /roadmap · /session_log <текст>\n\n' +
   'Аудит и бэкапы:\n' +
   '/audit · /audit_last · /audit_search <слово>\n' +
@@ -1007,7 +1021,7 @@ bot.command('report', async (ctx) => {
 bot.command('dashboard', async (ctx) => {
   try {
     await logEvent({ userId: ctx.from.id, action: 'dashboard_view', details: 'control center' })
-    const [h, p, s, leadsData, reminders, newsList, promoList, v, backups, lastDep, lastEv] =
+    const [h, p, s, leadsData, reminders, newsList, promoList, v, backups, lastDep, lastEv, fleet] =
       await Promise.all([
         checkHealth(),
         readPrices().catch(() => ({})),
@@ -1020,6 +1034,7 @@ bot.command('dashboard', async (ctx) => {
         listBackups().catch(() => []),
         lastEventMatching(['deploy', 'publish', 'price_update']).catch(() => null),
         lastEvent().catch(() => null),
+        getFleetStats().catch(() => ({ error: true })),
       ])
 
     const stationCount = p.stations ? Object.keys(p.stations).length : 0
@@ -1041,6 +1056,18 @@ bot.command('dashboard', async (ctx) => {
     const lastDeployLine = lastDep ? `${lastDep.action} · ${formatRu(lastDep.createdAt)}` : '—'
     const lastAuditLine = lastEv ? `${lastEv.action} · ${formatRu(lastEv.createdAt)}` : '—'
 
+    // E26 — блок транспорта (СКАУТ). null = не настроен, error = API недоступен.
+    const fleetBlock =
+      fleet == null
+        ? 'Транспорт:\nСКАУТ не подключён'
+        : fleet.error
+          ? 'Транспорт:\nСКАУТ недоступен'
+          : 'Транспорт:\n' +
+            `Машин: ${fleet.total}\n` +
+            `Двигатель ON: ${fleet.engineOn}\n` +
+            `Offline: ${fleet.offline}\n` +
+            `Топливо известно: ${fleet.fuelKnown}`
+
     await ctx.reply(
       '🏢 FAVORIT CONTROL CENTER\n\n' +
         `Сайт:\n${h.ok ? '🟢 ONLINE' : '🔴 OFFLINE'}\n\n` +
@@ -1052,6 +1079,7 @@ bot.command('dashboard', async (ctx) => {
         `Напоминания: ${reminders.length}\n` +
         `Новости: ${newsList.length}\n` +
         `Акции: ${promoList.length}\n\n` +
+        `${fleetBlock}\n\n` +
         `Последний deploy: ${lastDeployLine}\n` +
         `Последний backup: ${lastBackupName}\n` +
         `Последний audit: ${lastAuditLine}\n\n` +
@@ -1296,6 +1324,121 @@ bot.command('system_status', async (ctx) => {
     )
   } catch (err) {
     await ctx.reply(`❌ /system_status недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// ===== E26 — Scout Fleet Intelligence (read-only СКАУТ Онлайн) =====
+
+const SCOUT_NOT_CONFIGURED =
+  '⚪ СКАУТ не настроен.\nДобавьте в .env: SCOUT_API_TOKEN (и при необходимости ' +
+  'SCOUT_API_BASE). Интеграция строго read-only.'
+
+// --- /scout_status ---
+bot.command('scout_status', async (ctx) => {
+  try {
+    await logEvent({ userId: ctx.from.id, action: 'scout_status_view', details: 'scout' })
+    if (!isScoutConfigured()) {
+      await ctx.reply(SCOUT_NOT_CONFIGURED)
+      return
+    }
+    await ctx.reply(await formatFleetSummary())
+  } catch (err) {
+    await ctx.reply(`🔴 СКАУТ недоступен\nAPI: ${err.message}`)
+  }
+})
+
+// --- /scout_fleet + /fleet (alias) ---
+async function scoutFleetHandler(ctx) {
+  try {
+    await logEvent({ userId: ctx.from.id, action: 'scout_fleet_view', details: 'fleet' })
+    if (!isScoutConfigured()) {
+      await ctx.reply(SCOUT_NOT_CONFIGURED)
+      return
+    }
+    await ctx.reply('🚚 Автопарк (СКАУТ)\n\n' + (await formatFleet()).slice(0, 3800))
+  } catch (err) {
+    await ctx.reply(`❌ /scout_fleet недоступен\nОшибка: ${err.message}`)
+  }
+}
+bot.command('scout_fleet', scoutFleetHandler)
+bot.command('fleet', scoutFleetHandler)
+
+// --- /scout_truck <id|номер|часть> ---
+bot.command('scout_truck', async (ctx) => {
+  try {
+    const q = (ctx.match ?? '').trim()
+    if (!q) {
+      await ctx.reply('Формат: /scout_truck <id|номер|часть номера>')
+      return
+    }
+    await logEvent({ userId: ctx.from.id, action: 'scout_truck_view', details: q })
+    if (!isScoutConfigured()) {
+      await ctx.reply(SCOUT_NOT_CONFIGURED)
+      return
+    }
+    const u = await findScoutUnit(q)
+    if (!u) {
+      await ctx.reply(`Машина «${q}» не найдена.`)
+      return
+    }
+    await ctx.reply(formatTruckCard(u))
+  } catch (err) {
+    await ctx.reply(`❌ /scout_truck недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /scout_fuel ---
+bot.command('scout_fuel', async (ctx) => {
+  try {
+    await logEvent({ userId: ctx.from.id, action: 'scout_fuel_view', details: 'fuel' })
+    if (!isScoutConfigured()) {
+      await ctx.reply(SCOUT_NOT_CONFIGURED)
+      return
+    }
+    await ctx.reply((await formatFuelReport()).slice(0, 3800))
+  } catch (err) {
+    await ctx.reply(`❌ /scout_fuel недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /scout_map <id|номер> ---
+bot.command('scout_map', async (ctx) => {
+  try {
+    const q = (ctx.match ?? '').trim()
+    if (!q) {
+      await ctx.reply('Формат: /scout_map <id|номер>')
+      return
+    }
+    if (!isScoutConfigured()) {
+      await ctx.reply(SCOUT_NOT_CONFIGURED)
+      return
+    }
+    const u = await findScoutUnit(q)
+    if (!u) {
+      await ctx.reply(`Машина «${q}» не найдена.`)
+      return
+    }
+    const link = googleMapsLink(u.latitude, u.longitude)
+    if (!link) {
+      await ctx.reply(`📍 ${u.name}\nНет координат.`)
+      return
+    }
+    await ctx.reply(`📍 ${u.name}\n${link}`)
+  } catch (err) {
+    await ctx.reply(`❌ /scout_map недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /scout_offline ---
+bot.command('scout_offline', async (ctx) => {
+  try {
+    if (!isScoutConfigured()) {
+      await ctx.reply(SCOUT_NOT_CONFIGURED)
+      return
+    }
+    await ctx.reply((await formatOfflineReport()).slice(0, 3800))
+  } catch (err) {
+    await ctx.reply(`❌ /scout_offline недоступен\nОшибка: ${err.message}`)
   }
 })
 

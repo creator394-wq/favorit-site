@@ -82,6 +82,17 @@ const flows = new Map()
 
 const bot = new Bot(config.token)
 
+// E27 — реестр обработчиков: и команда, и кнопка меню вызывают ОДНУ функцию.
+// registerCommand = bot.command, но через bind, чтобы массовая замена
+// "command(" → "command(" не зацепила сам враппер (нет литерала command().
+const cmdHandlers = {}
+const registerCommand = bot.command.bind(bot)
+function command(name, handler) {
+  for (const n of Array.isArray(name) ? name : [name]) cmdHandlers[n] = handler
+  registerCommand(name, handler)
+  return handler
+}
+
 /**
  * Общий пайплайн публикации контента: коммит указанных файлов → build → deploy.
  * НЕ трогает ценовой gitDeploy. Прогресс/итог пишется в чат.
@@ -122,7 +133,7 @@ bot.use(async (ctx, next) => {
 })
 
 // --- /start ---
-bot.command('start', async (ctx) => {
+command('start', async (ctx) => {
   await ctx.reply(
     'Бот обновления цен «Фаворит Сервис».\n\n' +
       'Команды:\n' +
@@ -136,12 +147,14 @@ bot.command('start', async (ctx) => {
       '/screenshot — скриншот главной\n' +
       '/deploy — ручной деплой\n' +
       '/version — git-ветка/коммит + дата цен\n\n' +
-      'Любое изменение цен требует подтверждения кнопкой.',
+      'Любое изменение цен требует подтверждения кнопкой.\n\n' +
+      'Удобнее управлять через кнопочное меню — /menu.',
+    { reply_markup: new InlineKeyboard().text('📋 Открыть меню', 'menu:main') },
   )
 })
 
 // --- /status ---
-bot.command('status', async (ctx) => {
+command('status', async (ctx) => {
   try {
     const p = await readPrices()
     const blocks = STATION_KEYS.map((sid) => {
@@ -161,7 +174,7 @@ bot.command('status', async (ctx) => {
 })
 
 // --- /price ---
-bot.command('price', async (ctx) => {
+command('price', async (ctx) => {
   const text = (ctx.match ?? '').trim()
   if (!text) {
     await ctx.reply(`Формат: /price <${STATION_KEYS.join('|')}> ai92=60.10 ai95=65.10 dt=69.10 gas=32.10`)
@@ -236,7 +249,7 @@ bot.command('price', async (ctx) => {
 })
 
 // --- /publish ---
-bot.command('publish', async (ctx) => {
+command('publish', async (ctx) => {
   pending.set(ctx.from.id, { type: 'publish' })
   const kb = new InlineKeyboard()
     .text('🚀 Деплой', 'publish:confirm')
@@ -247,7 +260,7 @@ bot.command('publish', async (ctx) => {
 // ===== E6 — мониторинг (поверх существующей логики, ничего не ломает) =====
 
 // --- /health ---
-bot.command('health', async (ctx) => {
+command('health', async (ctx) => {
   const h = await checkHealth()
   if (h.ok) {
     await ctx.reply(
@@ -283,11 +296,11 @@ async function siteStatusHandler(ctx) {
   }
 }
 
-bot.command(['site_status', 'sitestatus'], siteStatusHandler)
+command(['site_status', 'sitestatus'], siteStatusHandler)
 bot.hears(/^\/site-status\b/, siteStatusHandler)
 
 // --- /screenshot ---
-bot.command('screenshot', async (ctx) => {
+command('screenshot', async (ctx) => {
   await ctx.reply('Делаю скриншот главной…')
   const shot = await takeScreenshot()
   if (!shot.ok) {
@@ -302,7 +315,7 @@ bot.command('screenshot', async (ctx) => {
 })
 
 // --- /deploy (ручной, прямой вызов runDeploy) ---
-bot.command('deploy', async (ctx) => {
+command('deploy', async (ctx) => {
   try {
     const deploy = await runDeploy()
     await logEvent({ userId: ctx.from.id, action: 'deploy', details: `manual · ${deploy.status}` })
@@ -316,7 +329,7 @@ bot.command('deploy', async (ctx) => {
 })
 
 // --- /version ---
-bot.command('version', async (ctx) => {
+command('version', async (ctx) => {
   const v = await gitVersion()
   let p
   try {
@@ -340,7 +353,9 @@ bot.command('version', async (ctx) => {
 
 const HELP_TEXT =
   'Команды Site Manager «Фаворит Сервис»:\n\n' +
+  '📋 Основное управление — через кнопочное меню: /menu\n\n' +
   '/start — приветствие\n' +
+  '/menu — кнопочное меню управления\n' +
   '/help — этот список\n' +
   '/status — цены (одним списком)\n' +
   '/price azs1 ai92=… ai95=… dt=… gas=… — цены АЗС №1\n' +
@@ -378,12 +393,12 @@ const HELP_TEXT =
   '/system_status'
 
 // --- /help ---
-bot.command('help', async (ctx) => {
+command('help', async (ctx) => {
   await ctx.reply(HELP_TEXT)
 })
 
 // --- /git_status ---
-bot.command('git_status', async (ctx) => {
+command('git_status', async (ctx) => {
   try {
     const g = await gitStatusInfo()
     if (g.error) {
@@ -407,7 +422,7 @@ bot.command('git_status', async (ctx) => {
 })
 
 // --- /logs ---
-bot.command('logs', async (ctx) => {
+command('logs', async (ctx) => {
   try {
     const l = await readRecentLogs()
     if (!l.ok) {
@@ -421,7 +436,7 @@ bot.command('logs', async (ctx) => {
 })
 
 // --- /check (сводная: health + version + prices, без screenshot) ---
-bot.command('check', async (ctx) => {
+command('check', async (ctx) => {
   try {
     const [h, v, p] = await Promise.all([
       checkHealth(),
@@ -449,7 +464,7 @@ bot.command('check', async (ctx) => {
 })
 
 // --- /quick_price (шпаргалка) ---
-bot.command('quick_price', async (ctx) => {
+command('quick_price', async (ctx) => {
   await ctx.reply(
     'Формат обновления цен:\n\n' +
       'АЗС №1:\n/price azs1 ai92=60.10 ai95=65.10 dt=69.10 gas=32.10\n\n' +
@@ -458,7 +473,7 @@ bot.command('quick_price', async (ctx) => {
 })
 
 // --- /restart_info ---
-bot.command('restart_info', async (ctx) => {
+command('restart_info', async (ctx) => {
   await ctx.reply(
     'Если бот не отвечает, на Windows открой PowerShell в проекте и выполни:\n\n' +
       'cd C:\\Users\\Данил\\favorit-site\n' +
@@ -481,7 +496,7 @@ const leadCard = (l) =>
     : '')
 
 // --- /leads (последние 10) ---
-bot.command('leads', async (ctx) => {
+command('leads', async (ctx) => {
   try {
     const { leads } = await readLeads()
     if (!leads.length) {
@@ -503,7 +518,7 @@ bot.command('leads', async (ctx) => {
 })
 
 // --- /lead_last ---
-bot.command('lead_last', async (ctx) => {
+command('lead_last', async (ctx) => {
   try {
     const { leads } = await readLeads()
     const l = leads[leads.length - 1]
@@ -518,7 +533,7 @@ bot.command('lead_last', async (ctx) => {
 })
 
 // --- /lead_view <id> ---
-bot.command('lead_view', async (ctx) => {
+command('lead_view', async (ctx) => {
   try {
     const id = (ctx.match ?? '').trim()
     if (!id) {
@@ -537,12 +552,12 @@ bot.command('lead_view', async (ctx) => {
 })
 
 // --- смена статуса: done/reject/callback/work ---
-function statusCommand(command, status) {
-  bot.command(command, async (ctx) => {
+function statusCommand(cmd, status) {
+  command(cmd, async (ctx) => {
     try {
       const id = (ctx.match ?? '').trim()
       if (!id) {
-        await ctx.reply(`Формат: /${command} <id>`)
+        await ctx.reply(`Формат: /${cmd} <id>`)
         return
       }
       const r = await setLeadStatus(id, status)
@@ -557,7 +572,7 @@ function statusCommand(command, status) {
       })
       await ctx.reply(`✅ Заявка ${sid(r.lead.id)} → ${STATUS_LABEL[status]}`)
     } catch (err) {
-      await ctx.reply(`❌ /${command} недоступен\nОшибка: ${err.message}`)
+      await ctx.reply(`❌ /${cmd} недоступен\nОшибка: ${err.message}`)
     }
   })
 }
@@ -567,7 +582,7 @@ statusCommand('lead_callback', 'callback')
 statusCommand('lead_work', 'in_progress')
 
 // --- /lead_note <id> текст ---
-bot.command('lead_note', async (ctx) => {
+command('lead_note', async (ctx) => {
   try {
     const raw = (ctx.match ?? '').trim()
     const sp = raw.indexOf(' ')
@@ -589,7 +604,7 @@ bot.command('lead_note', async (ctx) => {
 })
 
 // --- /lead_export (CSV) ---
-bot.command('lead_export', async (ctx) => {
+command('lead_export', async (ctx) => {
   try {
     const csv = await exportLeadsCsv()
     await ctx.replyWithDocument(new InputFile(Buffer.from(csv, 'utf8'), 'leads.csv'))
@@ -599,7 +614,7 @@ bot.command('lead_export', async (ctx) => {
 })
 
 // --- /lead_clear (подтверждение) ---
-bot.command('lead_clear', async (ctx) => {
+command('lead_clear', async (ctx) => {
   pending.set(ctx.from.id, { type: 'lead_clear' })
   const kb = new InlineKeyboard()
     .text('✅ Очистить', 'lead_clear:confirm')
@@ -608,7 +623,7 @@ bot.command('lead_clear', async (ctx) => {
 })
 
 // ===== E10 — Sales Funnel =====
-bot.command('lead_stats', async (ctx) => {
+command('lead_stats', async (ctx) => {
   try {
     const s = await leadStats()
     await ctx.reply(
@@ -628,7 +643,7 @@ bot.command('lead_stats', async (ctx) => {
 })
 
 // ===== E11 — Reminders =====
-bot.command('lead_remind', async (ctx) => {
+command('lead_remind', async (ctx) => {
   try {
     const parts = (ctx.match ?? '').trim().split(/\s+/).filter(Boolean)
     const id = parts.shift()
@@ -657,7 +672,7 @@ bot.command('lead_remind', async (ctx) => {
   }
 })
 
-bot.command('reminders', async (ctx) => {
+command('reminders', async (ctx) => {
   try {
     const list = await listReminders()
     if (!list.length) {
@@ -673,7 +688,7 @@ bot.command('reminders', async (ctx) => {
   }
 })
 
-bot.command('remind_cancel', async (ctx) => {
+command('remind_cancel', async (ctx) => {
   try {
     const id = (ctx.match ?? '').trim()
     if (!id) {
@@ -688,12 +703,12 @@ bot.command('remind_cancel', async (ctx) => {
 })
 
 // ===== E12 — News Manager =====
-bot.command('news_create', async (ctx) => {
+command('news_create', async (ctx) => {
   flows.set(ctx.from.id, { type: 'news', step: 'title', data: {} })
   await ctx.reply('📰 Новая новость. Введите заголовок:')
 })
 
-bot.command('news_list', async (ctx) => {
+command('news_list', async (ctx) => {
   try {
     const items = await news.list()
     if (!items.length) {
@@ -713,7 +728,7 @@ bot.command('news_list', async (ctx) => {
   }
 })
 
-bot.command('news_delete', async (ctx) => {
+command('news_delete', async (ctx) => {
   try {
     const id = (ctx.match ?? '').trim()
     if (!id) {
@@ -734,12 +749,12 @@ bot.command('news_delete', async (ctx) => {
 })
 
 // ===== E13 — Promo Manager =====
-bot.command('promo_create', async (ctx) => {
+command('promo_create', async (ctx) => {
   flows.set(ctx.from.id, { type: 'promo', step: 'title', data: {} })
   await ctx.reply('🎟 Новая акция. Введите заголовок:')
 })
 
-bot.command('promo_list', async (ctx) => {
+command('promo_list', async (ctx) => {
   try {
     const items = await promos.list()
     if (!items.length) {
@@ -759,7 +774,7 @@ bot.command('promo_list', async (ctx) => {
   }
 })
 
-bot.command('promo_delete', async (ctx) => {
+command('promo_delete', async (ctx) => {
   try {
     const id = (ctx.match ?? '').trim()
     if (!id) {
@@ -780,7 +795,7 @@ bot.command('promo_delete', async (ctx) => {
 })
 
 // ===== E18 — Transport Management =====
-bot.command('trucks', async (ctx) => {
+command('trucks', async (ctx) => {
   try {
     const items = await trucks.list()
     if (!items.length) {
@@ -798,7 +813,7 @@ bot.command('trucks', async (ctx) => {
   }
 })
 
-bot.command('truck_add', async (ctx) => {
+command('truck_add', async (ctx) => {
   try {
     const parts = (ctx.match ?? '').split('|').map((s) => s.trim())
     const [plate, model, status] = parts
@@ -813,7 +828,7 @@ bot.command('truck_add', async (ctx) => {
   }
 })
 
-bot.command('truck_edit', async (ctx) => {
+command('truck_edit', async (ctx) => {
   try {
     const parts = (ctx.match ?? '').split('|').map((s) => s.trim())
     const id = parts.shift()
@@ -833,7 +848,7 @@ bot.command('truck_edit', async (ctx) => {
   }
 })
 
-bot.command('truck_delete', async (ctx) => {
+command('truck_delete', async (ctx) => {
   try {
     const id = (ctx.match ?? '').trim()
     if (!id) {
@@ -848,7 +863,7 @@ bot.command('truck_delete', async (ctx) => {
 })
 
 // ===== E19 — Maintenance =====
-bot.command('maintenance', async (ctx) => {
+command('maintenance', async (ctx) => {
   try {
     const items = await maintenance.list()
     if (!items.length) {
@@ -869,7 +884,7 @@ bot.command('maintenance', async (ctx) => {
   }
 })
 
-bot.command('maintenance_add', async (ctx) => {
+command('maintenance_add', async (ctx) => {
   try {
     const parts = (ctx.match ?? '').split('|').map((s) => s.trim())
     const [truck, work, date] = parts
@@ -884,7 +899,7 @@ bot.command('maintenance_add', async (ctx) => {
   }
 })
 
-bot.command('maintenance_done', async (ctx) => {
+command('maintenance_done', async (ctx) => {
   try {
     const id = (ctx.match ?? '').trim()
     if (!id) {
@@ -899,7 +914,7 @@ bot.command('maintenance_done', async (ctx) => {
 })
 
 // ===== E14 — Content Manager (NL) =====
-bot.command('content', async (ctx) => {
+command('content', async (ctx) => {
   flows.set(ctx.from.id, { type: 'content', step: 'await', data: {} })
   await ctx.reply(
     '✏️ Content Manager. Напишите, что изменить:\n' +
@@ -916,7 +931,7 @@ const GA_HINT =
   '(GA_CLIENT_EMAIL, GA_PRIVATE_KEY) или GA4_ACCESS_TOKEN.'
 
 // --- /analytics (сводка трафика + заявки/конверсия) ---
-bot.command('analytics', async (ctx) => {
+command('analytics', async (ctx) => {
   try {
     await logEvent({ userId: ctx.from.id, action: 'analytics_view', details: 'overview 7d' })
     const ov = await getOverview(7)
@@ -937,7 +952,7 @@ bot.command('analytics', async (ctx) => {
 })
 
 // --- /top_pages (ТОП страниц) ---
-bot.command('top_pages', async (ctx) => {
+command('top_pages', async (ctx) => {
   try {
     const r = await getTopPages(7, 7)
     if (!r.configured) {
@@ -962,7 +977,7 @@ bot.command('top_pages', async (ctx) => {
 })
 
 // --- /sources (источники трафика) ---
-bot.command('sources', async (ctx) => {
+command('sources', async (ctx) => {
   try {
     const r = await getTrafficSources(7)
     if (!r.configured) {
@@ -987,7 +1002,7 @@ bot.command('sources', async (ctx) => {
 })
 
 // --- /conversion (конверсия по заявкам — реальные данные CRM) ---
-bot.command('conversion', async (ctx) => {
+command('conversion', async (ctx) => {
   try {
     const c = await getConversion(7)
     let msg =
@@ -1007,7 +1022,7 @@ bot.command('conversion', async (ctx) => {
 })
 
 // ===== E25 — AI Director (/report) =====
-bot.command('report', async (ctx) => {
+command('report', async (ctx) => {
   try {
     await logEvent({ userId: ctx.from.id, action: 'director_report', details: 'manual /report' })
     const { text } = await directorReport()
@@ -1018,7 +1033,7 @@ bot.command('report', async (ctx) => {
 })
 
 // ===== E24 — FAVORIT Control Center (/dashboard) =====
-bot.command('dashboard', async (ctx) => {
+command('dashboard', async (ctx) => {
   try {
     await logEvent({ userId: ctx.from.id, action: 'dashboard_view', details: 'control center' })
     const [h, p, s, leadsData, reminders, newsList, promoList, v, backups, lastDep, lastEv, fleet] =
@@ -1094,7 +1109,7 @@ bot.command('dashboard', async (ctx) => {
 // ===== E21 — Obsidian Project Memory =====
 
 // --- /docs (справка по проектной памяти) ---
-bot.command('docs', async (ctx) => {
+command('docs', async (ctx) => {
   try {
     await ctx.reply(await docsHelp())
   } catch (err) {
@@ -1103,7 +1118,7 @@ bot.command('docs', async (ctx) => {
 })
 
 // --- /roadmap (краткий план из ROADMAP.md) ---
-bot.command('roadmap', async (ctx) => {
+command('roadmap', async (ctx) => {
   try {
     const raw = await readRoadmap()
     if (!raw.trim()) {
@@ -1119,7 +1134,7 @@ bot.command('roadmap', async (ctx) => {
 })
 
 // --- /session_log <текст> (добавить запись в CHANGELOG) ---
-bot.command('session_log', async (ctx) => {
+command('session_log', async (ctx) => {
   try {
     const text = (ctx.match ?? '').trim()
     if (!text) {
@@ -1142,7 +1157,7 @@ bot.command('session_log', async (ctx) => {
 const auditLine = (e) => `${formatRu(e.createdAt)} · ${e.action}\n${e.details || '—'}`
 
 // --- E22.2 /audit (последние 20) ---
-bot.command('audit', async (ctx) => {
+command('audit', async (ctx) => {
   try {
     const events = await recentEvents(20)
     if (!events.length) {
@@ -1158,7 +1173,7 @@ bot.command('audit', async (ctx) => {
 })
 
 // --- E22.2 /audit_last (последнее событие полностью) ---
-bot.command('audit_last', async (ctx) => {
+command('audit_last', async (ctx) => {
   try {
     const e = await lastEvent()
     if (!e) {
@@ -1179,7 +1194,7 @@ bot.command('audit_last', async (ctx) => {
 })
 
 // --- E22.2 /audit_search <слово> ---
-bot.command('audit_search', async (ctx) => {
+command('audit_search', async (ctx) => {
   try {
     const term = (ctx.match ?? '').trim()
     if (!term) {
@@ -1201,7 +1216,7 @@ bot.command('audit_search', async (ctx) => {
 })
 
 // --- E22.4 /backup_now ---
-bot.command('backup_now', async (ctx) => {
+command('backup_now', async (ctx) => {
   try {
     const r = await createBackup()
     if (!r.ok) {
@@ -1222,7 +1237,7 @@ bot.command('backup_now', async (ctx) => {
 })
 
 // --- E22.4 /backups (список) ---
-bot.command('backups', async (ctx) => {
+command('backups', async (ctx) => {
   try {
     const list = await listBackups()
     if (!list.length) {
@@ -1242,7 +1257,7 @@ bot.command('backups', async (ctx) => {
 })
 
 // --- E22.4 /backup_restore <date> (с подтверждением) ---
-bot.command('backup_restore', async (ctx) => {
+command('backup_restore', async (ctx) => {
   try {
     const date = (ctx.match ?? '').trim()
     if (!date) {
@@ -1305,7 +1320,7 @@ bot.callbackQuery('restore:confirm', async (ctx) => {
 })
 
 // --- E22.7 /system_status ---
-bot.command('system_status', async (ctx) => {
+command('system_status', async (ctx) => {
   try {
     const [aCount, backups, h, lastDep] = await Promise.all([
       auditCount(),
@@ -1334,7 +1349,7 @@ const SCOUT_NOT_CONFIGURED =
   'SCOUT_API_BASE). Интеграция строго read-only.'
 
 // --- /scout_status ---
-bot.command('scout_status', async (ctx) => {
+command('scout_status', async (ctx) => {
   try {
     await logEvent({ userId: ctx.from.id, action: 'scout_status_view', details: 'scout' })
     if (!isScoutConfigured()) {
@@ -1360,11 +1375,11 @@ async function scoutFleetHandler(ctx) {
     await ctx.reply(`❌ /scout_fleet недоступен\nОшибка: ${err.message}`)
   }
 }
-bot.command('scout_fleet', scoutFleetHandler)
-bot.command('fleet', scoutFleetHandler)
+command('scout_fleet', scoutFleetHandler)
+command('fleet', scoutFleetHandler)
 
 // --- /scout_truck <id|номер|часть> ---
-bot.command('scout_truck', async (ctx) => {
+command('scout_truck', async (ctx) => {
   try {
     const q = (ctx.match ?? '').trim()
     if (!q) {
@@ -1388,7 +1403,7 @@ bot.command('scout_truck', async (ctx) => {
 })
 
 // --- /scout_fuel ---
-bot.command('scout_fuel', async (ctx) => {
+command('scout_fuel', async (ctx) => {
   try {
     await logEvent({ userId: ctx.from.id, action: 'scout_fuel_view', details: 'fuel' })
     if (!isScoutConfigured()) {
@@ -1402,7 +1417,7 @@ bot.command('scout_fuel', async (ctx) => {
 })
 
 // --- /scout_map <id|номер> ---
-bot.command('scout_map', async (ctx) => {
+command('scout_map', async (ctx) => {
   try {
     const q = (ctx.match ?? '').trim()
     if (!q) {
@@ -1430,7 +1445,7 @@ bot.command('scout_map', async (ctx) => {
 })
 
 // --- /scout_offline ---
-bot.command('scout_offline', async (ctx) => {
+command('scout_offline', async (ctx) => {
   try {
     if (!isScoutConfigured()) {
       await ctx.reply(SCOUT_NOT_CONFIGURED)
@@ -1440,6 +1455,214 @@ bot.command('scout_offline', async (ctx) => {
   } catch (err) {
     await ctx.reply(`❌ /scout_offline недоступен\nОшибка: ${err.message}`)
   }
+})
+
+// ===== E27 — Telegram Control Menu (кнопочное управление) =====
+
+const homeKb = () => new InlineKeyboard().text('🏠 Главное меню', 'menu:main')
+const withBack = (kb) => kb.row().text('🔙 Назад', 'menu:main')
+
+function mainMenuKb() {
+  return new InlineKeyboard()
+    .text('🏢 Дашборд', 'menu:act:dashboard')
+    .row()
+    .text('⛽ Цены АЗС', 'menu:sec:prices')
+    .text('📞 Заявки / CRM', 'menu:sec:crm')
+    .row()
+    .text('🚚 Транспорт', 'menu:sec:transport')
+    .text('📰 Контент', 'menu:sec:content')
+    .row()
+    .text('📊 Аналитика', 'menu:sec:analytics')
+    .text('🛡 Надёжность', 'menu:sec:reliability')
+    .row()
+    .text('⚙️ Система', 'menu:sec:system')
+}
+
+// Подменю: каждое заканчивается кнопкой 🔙 Назад.
+const SECTIONS = {
+  prices: () =>
+    withBack(
+      new InlineKeyboard()
+        .text('📊 Текущие цены', 'menu:act:status')
+        .row()
+        .text('✏️ Изменить АЗС №1', 'menu:act:price1')
+        .row()
+        .text('✏️ Изменить АЗС №2', 'menu:act:price2'),
+    ),
+  crm: () =>
+    withBack(
+      new InlineKeyboard()
+        .text('📋 Последние заявки', 'menu:act:leads')
+        .row()
+        .text('🧾 Последняя заявка', 'menu:act:lead_last')
+        .row()
+        .text('📈 Воронка', 'menu:act:lead_stats')
+        .row()
+        .text('⏰ Напоминания', 'menu:act:reminders'),
+    ),
+  transport: () =>
+    withBack(
+      new InlineKeyboard()
+        .text('🚚 Парк', 'menu:act:scout_fleet')
+        .row()
+        .text('⛽ Топливо', 'menu:act:scout_fuel')
+        .row()
+        .text('⚠️ Offline', 'menu:act:scout_offline')
+        .row()
+        .text('📊 Отчёт транспорта', 'menu:act:transport_report'),
+    ),
+  content: () =>
+    withBack(
+      new InlineKeyboard()
+        .text('📰 Новости', 'menu:act:news_list')
+        .row()
+        .text('🎯 Акции', 'menu:act:promo_list')
+        .row()
+        .text('✏️ Изменить контент', 'menu:act:content')
+        .row()
+        .text('🧠 Obsidian docs', 'menu:act:docs'),
+    ),
+  analytics: () =>
+    withBack(
+      new InlineKeyboard()
+        .text('📊 Аналитика', 'menu:act:analytics')
+        .row()
+        .text('📄 Топ страниц', 'menu:act:top_pages')
+        .row()
+        .text('🌐 Источники', 'menu:act:sources')
+        .row()
+        .text('📈 Конверсия', 'menu:act:conversion')
+        .row()
+        .text('🧠 AI отчёт', 'menu:act:report'),
+    ),
+  reliability: () =>
+    withBack(
+      new InlineKeyboard()
+        .text('🧾 Audit', 'menu:act:audit')
+        .row()
+        .text('💾 Backup now', 'menu:act:backup_now')
+        .row()
+        .text('📦 Backups', 'menu:act:backups')
+        .row()
+        .text('🧯 System status', 'menu:act:system_status'),
+    ),
+  system: () =>
+    withBack(
+      new InlineKeyboard()
+        .text('❤️ Health', 'menu:act:health')
+        .row()
+        .text('📸 Screenshot', 'menu:act:screenshot')
+        .row()
+        .text('🧬 Version', 'menu:act:version')
+        .row()
+        .text('🚀 Deploy', 'menu:act:deploy'),
+    ),
+}
+
+const SECTION_TITLES = {
+  prices: '⛽ Цены АЗС',
+  crm: '📞 Заявки / CRM',
+  transport: '🚚 Транспорт',
+  content: '📰 Контент',
+  analytics: '📊 Аналитика',
+  reliability: '🛡 Надёжность',
+  system: '⚙️ Система',
+}
+
+const MAIN_MENU_TEXT = '🏢 FAVORIT — Центр управления\n\nВыберите раздел:'
+
+const PRICE1_HINT =
+  'Чтобы изменить цены АЗС №1, отправьте:\n\n/price azs1 ai92=60.10 ai95=65.10 dt=69.10 gas=32.10'
+const PRICE2_HINT =
+  'Чтобы изменить цены АЗС №2, отправьте:\n\n/price azs2 ai92=61.10 ai95=66.10 dt=70.10 gas=33.10'
+
+// Краткий отчёт транспорта для кнопки (использует ту же getFleetStats).
+async function transportReport(ctx) {
+  if (!isScoutConfigured()) {
+    await ctx.reply(SCOUT_NOT_CONFIGURED)
+    return
+  }
+  const s = await getFleetStats()
+  if (!s) {
+    await ctx.reply('🚚 Отчёт транспорта\n\nДанные недоступны.')
+    return
+  }
+  await ctx.reply(
+    '🚚 Отчёт транспорта\n\n' +
+      `Машин: ${s.total}\n` +
+      `Двигатель ON: ${s.engineOn}\n` +
+      `Offline (>${s.offlineMinutes}м): ${s.offline}\n` +
+      `Топливо известно: ${s.fuelKnown}\n` +
+      (s.noFuel.length ? `Без датчика топлива: ${s.noFuel.join(', ')}` : 'Все датчики топлива на связи'),
+  )
+}
+
+async function showMainMenu(ctx, edit) {
+  const opts = { reply_markup: mainMenuKb() }
+  if (edit) {
+    try {
+      await ctx.editMessageText(MAIN_MENU_TEXT, opts)
+      return
+    } catch {
+      /* сообщение нельзя отредактировать — отправим новое */
+    }
+  }
+  await ctx.reply(MAIN_MENU_TEXT, opts)
+}
+
+// --- /menu ---
+command('menu', async (ctx) => {
+  await logEvent({ userId: ctx.from.id, action: 'menu_open', details: '/menu' })
+  await showMainMenu(ctx, false)
+})
+
+// Навигация: главное меню
+bot.callbackQuery('menu:main', async (ctx) => {
+  await ctx.answerCallbackQuery()
+  await logEvent({ userId: ctx.from.id, action: 'menu_open', details: 'main' })
+  await showMainMenu(ctx, true)
+})
+
+// Навигация: разделы
+bot.callbackQuery(/^menu:sec:(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery()
+  const sec = ctx.match[1]
+  const build = SECTIONS[sec]
+  if (!build) {
+    await ctx.reply('Раздел не найден.', { reply_markup: homeKb() })
+    return
+  }
+  await logEvent({ userId: ctx.from.id, action: 'menu_section_open', details: sec })
+  const text = `${SECTION_TITLES[sec]}\n\nВыберите действие:`
+  try {
+    await ctx.editMessageText(text, { reply_markup: build() })
+  } catch {
+    await ctx.reply(text, { reply_markup: build() })
+  }
+})
+
+// Действия: вызывают существующую логику команд (cmdHandlers) — без дублирования.
+bot.callbackQuery(/^menu:act:(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery()
+  const action = ctx.match[1]
+  await logEvent({ userId: ctx.from.id, action: 'menu_action', details: action })
+  try {
+    if (action === 'price1') await ctx.reply(PRICE1_HINT)
+    else if (action === 'price2') await ctx.reply(PRICE2_HINT)
+    else if (action === 'transport_report') await transportReport(ctx)
+    else {
+      const fn = cmdHandlers[action]
+      if (!fn) {
+        await ctx.reply('Действие не найдено.', { reply_markup: homeKb() })
+        return
+      }
+      await fn(ctx) // та же функция, что и у команды
+    }
+  } catch (err) {
+    await ctx.reply(`❌ Ошибка: ${err.message}`, { reply_markup: homeKb() })
+    return
+  }
+  await ctx.reply('⬆️ Готово.', { reply_markup: homeKb() })
 })
 
 // --- callbacks ---

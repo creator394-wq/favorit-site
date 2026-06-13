@@ -30,6 +30,15 @@ import { parseWhen, addReminder, listReminders, cancelReminder, popDueReminders 
 import { news, promos, trucks, maintenance } from './collections.mjs'
 import { prepareContentEdit, writeContacts, CONTACTS_REL } from './content.mjs'
 import { docsHelp, readRoadmap, appendSessionLog } from './docs.mjs'
+import {
+  logEvent,
+  recentEvents,
+  lastEvent,
+  searchEvents,
+  auditCount,
+  lastEventMatching,
+} from './audit.mjs'
+import { createBackup, listBackups, restoreBackup } from './backup.mjs'
 
 const LABELS = { ai92: 'АИ-92', ai95: 'АИ-95', dt: 'ДТ', gas: 'СУГ' }
 
@@ -277,6 +286,7 @@ bot.command('screenshot', async (ctx) => {
 bot.command('deploy', async (ctx) => {
   try {
     const deploy = await runDeploy()
+    await logEvent({ userId: ctx.from.id, action: 'deploy', details: `manual · ${deploy.status}` })
     if (deploy.status === 'ok') await ctx.reply('🚀 Deploy: PASS')
     else if (deploy.status === 'skipped')
       await ctx.reply('⚠️ Deploy: SKIPPED (VERCEL_DEPLOY_HOOK_URL не задан)')
@@ -337,7 +347,11 @@ const HELP_TEXT =
   'Транспорт: /trucks /truck_add /truck_edit /truck_delete\n' +
   'ТО: /maintenance /maintenance_add /maintenance_done <id>\n\n' +
   'Аналитика: /analytics /report /dashboard\n\n' +
-  'Проектная память: /docs · /roadmap · /session_log <текст>'
+  'Проектная память: /docs · /roadmap · /session_log <текст>\n\n' +
+  'Аудит и бэкапы:\n' +
+  '/audit · /audit_last · /audit_search <слово>\n' +
+  '/backup_now · /backups · /backup_restore <date>\n' +
+  '/system_status'
 
 // --- /help ---
 bot.command('help', async (ctx) => {
@@ -512,6 +526,11 @@ function statusCommand(command, status) {
         await ctx.reply(`❌ ${r.error}`)
         return
       }
+      await logEvent({
+        userId: ctx.from.id,
+        action: 'lead_status',
+        details: `${sid(r.lead.id)} → ${STATUS_LABEL[status] ?? status}`,
+      })
       await ctx.reply(`✅ Заявка ${sid(r.lead.id)} → ${STATUS_LABEL[status]}`)
     } catch (err) {
       await ctx.reply(`❌ /${command} недоступен\nОшибка: ${err.message}`)
@@ -682,6 +701,7 @@ bot.command('news_delete', async (ctx) => {
       await ctx.reply('Новость не найдена.')
       return
     }
+    await logEvent({ userId: ctx.from.id, action: 'news_delete', details: `id ${id}` })
     await ctx.reply('✅ Удалено. Публикую…')
     await publishFiles(ctx, ['src/data/news.json'], 'chore: delete news')
   } catch (err) {
@@ -727,6 +747,7 @@ bot.command('promo_delete', async (ctx) => {
       await ctx.reply('Акция не найдена.')
       return
     }
+    await logEvent({ userId: ctx.from.id, action: 'promo_delete', details: `id ${id}` })
     await ctx.reply('✅ Удалено. Публикую…')
     await publishFiles(ctx, ['src/data/promos.json'], 'chore: delete promo')
   } catch (err) {
@@ -973,6 +994,196 @@ bot.command('session_log', async (ctx) => {
   }
 })
 
+// ===== E22 — Audit Log & Backups =====
+
+const auditLine = (e) => `${formatRu(e.createdAt)} · ${e.action}\n${e.details || '—'}`
+
+// --- E22.2 /audit (последние 20) ---
+bot.command('audit', async (ctx) => {
+  try {
+    const events = await recentEvents(20)
+    if (!events.length) {
+      await ctx.reply('📋 Журнал аудита пуст.')
+      return
+    }
+    await ctx.reply(
+      '📋 Аудит — последние события\n\n' + events.map(auditLine).join('\n\n').slice(0, 3800),
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /audit недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- E22.2 /audit_last (последнее событие полностью) ---
+bot.command('audit_last', async (ctx) => {
+  try {
+    const e = await lastEvent()
+    if (!e) {
+      await ctx.reply('Журнал аудита пуст.')
+      return
+    }
+    await ctx.reply(
+      '📋 Последнее событие\n\n' +
+        `ID: ${sid(e.id)}\n` +
+        `Время: ${formatRu(e.createdAt)}\n` +
+        `Пользователь: ${e.userId || '—'}\n` +
+        `Действие: ${e.action}\n` +
+        `Детали: ${e.details || '—'}`,
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /audit_last недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- E22.2 /audit_search <слово> ---
+bot.command('audit_search', async (ctx) => {
+  try {
+    const term = (ctx.match ?? '').trim()
+    if (!term) {
+      await ctx.reply('Формат: /audit_search <слово>')
+      return
+    }
+    const events = await searchEvents(term, 20)
+    if (!events.length) {
+      await ctx.reply(`Ничего не найдено по «${term}».`)
+      return
+    }
+    await ctx.reply(
+      `🔎 Аудит — найдено по «${term}» (${events.length})\n\n` +
+        events.map(auditLine).join('\n\n').slice(0, 3800),
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /audit_search недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- E22.4 /backup_now ---
+bot.command('backup_now', async (ctx) => {
+  try {
+    const r = await createBackup()
+    if (!r.ok) {
+      await ctx.reply(`❌ Backup failed\n${r.error}`)
+      return
+    }
+    await logEvent({
+      userId: ctx.from.id,
+      action: 'backup',
+      details: `${r.name} · ${r.count} файл(ов) · ${r.sizeText}`,
+    })
+    await ctx.reply(
+      '✅ Backup created\n\n' + `Файлов:\n${r.count}\n\n` + `Размер:\n${r.sizeText}\n\nПапка: ${r.name}`,
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /backup_now недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- E22.4 /backups (список) ---
+bot.command('backups', async (ctx) => {
+  try {
+    const list = await listBackups()
+    if (!list.length) {
+      await ctx.reply('🗄 Бэкапов пока нет. Создать: /backup_now')
+      return
+    }
+    await ctx.reply(
+      '🗄 Бэкапы (новые сверху)\n\n' +
+        list
+          .slice(0, 15)
+          .map((b) => `${b.name}\n${b.count} файл(ов) · ${b.sizeText}`)
+          .join('\n\n'),
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /backups недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- E22.4 /backup_restore <date> (с подтверждением) ---
+bot.command('backup_restore', async (ctx) => {
+  try {
+    const date = (ctx.match ?? '').trim()
+    if (!date) {
+      await ctx.reply('Формат: /backup_restore <date>\nПример: /backup_restore 2026-06-13\nСписок: /backups')
+      return
+    }
+    const match = (await listBackups()).find((b) => b.name === date)
+    if (!match) {
+      await ctx.reply(`Бэкап «${date}» не найден. /backups — список.`)
+      return
+    }
+    pending.set(ctx.from.id, { type: 'restore', name: match.name })
+    const kb = new InlineKeyboard()
+      .text('✅ Restore', 'restore:confirm')
+      .text('❌ Cancel', 'restore:cancel')
+    await ctx.reply(
+      `Восстановить данные из бэкапа «${match.name}»?\n\n` +
+        `Файлов: ${match.count}\n\n` +
+        '⚠️ Текущее состояние будет автоматически сохранено в emergency backup.',
+      { reply_markup: kb },
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /backup_restore недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- E22.5 restore callbacks ---
+bot.callbackQuery('restore:cancel', async (ctx) => {
+  pending.delete(ctx.from.id)
+  await ctx.answerCallbackQuery()
+  await ctx.editMessageText('Отменено.')
+})
+
+bot.callbackQuery('restore:confirm', async (ctx) => {
+  const op = pending.get(ctx.from.id)
+  if (!op || op.type !== 'restore') {
+    await ctx.answerCallbackQuery({ text: 'Нечего подтверждать' })
+    return
+  }
+  pending.delete(ctx.from.id)
+  await ctx.answerCallbackQuery()
+  await ctx.editMessageText(`Восстанавливаю из «${op.name}»…`)
+  const r = await restoreBackup(op.name)
+  if (!r.ok) {
+    await ctx.reply(`❌ Restore failed\n${r.error}`)
+    return
+  }
+  await logEvent({
+    userId: ctx.from.id,
+    action: 'restore',
+    details: `from ${r.name} · файлов ${r.restored.length} · emergency ${r.emergency ?? '—'}`,
+  })
+  await ctx.reply(
+    '✅ Restore complete\n\n' +
+      `Из бэкапа: ${r.name}\n` +
+      `Восстановлено файлов: ${r.restored.length}\n` +
+      `Emergency backup: ${r.emergency ?? '—'}\n\n` +
+      '⚠️ Изменились файлы в src/data/. Если затронуты новости/акции — перед /price проверьте /git_status.',
+  )
+})
+
+// --- E22.7 /system_status ---
+bot.command('system_status', async (ctx) => {
+  try {
+    const [aCount, backups, h, lastDep] = await Promise.all([
+      auditCount(),
+      listBackups(),
+      checkHealth(),
+      lastEventMatching(['deploy', 'publish', 'price_update']),
+    ])
+    const last = backups[0] ?? null
+    await ctx.reply(
+      '🛡 System Status\n\n' +
+        `Audit events:\n${aCount}\n\n` +
+        `Backups:\n${backups.length}\n\n` +
+        `Last backup:\n${last ? last.name : '—'}\n\n` +
+        `Site:\n${h.ok ? '🟢 ONLINE' : '🔴 OFFLINE'}\n\n` +
+        `Deploy:\n${lastDep ? formatRu(lastDep.createdAt) : '—'}`,
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /system_status недоступен\nОшибка: ${err.message}`)
+  }
+})
+
 // --- callbacks ---
 bot.callbackQuery('price:cancel', async (ctx) => {
   pending.delete(ctx.from.id)
@@ -995,6 +1206,11 @@ bot.callbackQuery('price:confirm', async (ctx) => {
     await ctx.reply('❌ Ошибка обновления цен:\n' + (upd.stderr || upd.stdout).slice(-1500))
     return
   }
+  await logEvent({
+    userId: ctx.from.id,
+    action: 'price_update',
+    details: `${op.station}: ${Object.entries(op.cleaned).map(([k, v]) => `${k}=${v}`).join(' ')}`,
+  })
   await ctx.reply('✅ Цены записаны. Запускаю build…')
 
   const build = await runBuild()
@@ -1077,6 +1293,7 @@ bot.callbackQuery('publish:confirm', async (ctx) => {
     await ctx.reply(`❌ Deploy: FAIL (${deploy.message})`)
     return
   }
+  await logEvent({ userId: ctx.from.id, action: 'publish', details: `deploy ${deploy.status}` })
   await ctx.reply('🚀 Деплой запущен (Vercel). Git push бот не делает.')
 })
 
@@ -1097,6 +1314,7 @@ bot.callbackQuery('lead_clear:confirm', async (ctx) => {
   await ctx.answerCallbackQuery()
   try {
     await clearLeads()
+    await logEvent({ userId: ctx.from.id, action: 'leads_clear', details: 'все заявки' })
     await ctx.editMessageText('🗑 Все заявки очищены.')
   } catch (err) {
     await ctx.editMessageText(`❌ Не удалось очистить: ${err.message}`)
@@ -1122,6 +1340,7 @@ bot.callbackQuery('content:confirm', async (ctx) => {
   await ctx.editMessageText('Применяю и публикую…')
   try {
     await writeContacts(op.newContent)
+    await logEvent({ userId: ctx.from.id, action: 'content_update', details: 'contacts' })
     await publishFiles(ctx, [CONTACTS_REL], 'chore: update site content')
   } catch (err) {
     await ctx.reply(`❌ Не удалось применить: ${err.message}`)
@@ -1139,6 +1358,7 @@ bot.callbackQuery('news:confirm', async (ctx) => {
   await ctx.editMessageText('Сохраняю и публикую новость…')
   try {
     await news.add(op.data)
+    await logEvent({ userId: ctx.from.id, action: 'news_create', details: op.data?.title ?? '' })
     await publishFiles(ctx, ['src/data/news.json'], 'chore: add news')
   } catch (err) {
     await ctx.reply(`❌ Не удалось опубликовать: ${err.message}`)
@@ -1156,6 +1376,7 @@ bot.callbackQuery('promo:confirm', async (ctx) => {
   await ctx.editMessageText('Сохраняю и публикую акцию…')
   try {
     await promos.add(op.data)
+    await logEvent({ userId: ctx.from.id, action: 'promo_create', details: op.data?.title ?? '' })
     await publishFiles(ctx, ['src/data/promos.json'], 'chore: add promo')
   } catch (err) {
     await ctx.reply(`❌ Не удалось опубликовать: ${err.message}`)
@@ -1276,8 +1497,30 @@ async function tickDailyReport() {
   }
 }
 
+// E22.6 — ежедневный backup в 03:00 (если бот запущен).
+let lastDailyBackupDay = -1
+async function tickDailyBackup() {
+  try {
+    const now = new Date()
+    if (now.getHours() === 3 && now.getDate() !== lastDailyBackupDay) {
+      lastDailyBackupDay = now.getDate()
+      const r = await createBackup()
+      if (r.ok) {
+        await logEvent({
+          userId: 'system',
+          action: 'backup',
+          details: `daily ${r.name} · ${r.count} файл(ов) · ${r.sizeText}`,
+        })
+      }
+    }
+  } catch {
+    /* не валим планировщик */
+  }
+}
+
 setInterval(tickReminders, 60_000)
 setInterval(tickDailyReport, 60_000)
+setInterval(tickDailyBackup, 60_000)
 
 // ===== E8 — приём заявок с сайта + мгновенное уведомление админов =====
 async function notifyLead(lead) {

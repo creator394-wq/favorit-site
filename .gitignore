@@ -41,3 +41,7 @@ src/data/maintenance.json
 # E21 — Obsidian проектная память: локальные заметки, /session_log часто
 # переписывает CHANGELOG. Не коммитятся — иначе ломают ценовой gitDeploy.
 docs/obsidian/
+
+# E22 — Audit log + backups: операционные данные бота, меняются постоянно.
+# Якорь /data/ (только корень) — НЕ затрагивает tracked-файлы в src/data/.
+/data/

@@ -39,6 +39,14 @@ import {
   lastEventMatching,
 } from './audit.mjs'
 import { createBackup, listBackups, restoreBackup } from './backup.mjs'
+import {
+  getOverview,
+  getTopPages,
+  getTrafficSources,
+  getConversion,
+  getAnalyticsConfig,
+} from './analytics.mjs'
+import { directorReport, dailyReport } from './director.mjs'
 
 const LABELS = { ai92: 'АИ-92', ai95: 'АИ-95', dt: 'ДТ', gas: 'СУГ' }
 
@@ -346,7 +354,9 @@ const HELP_TEXT =
   '/promo_create /promo_list /promo_delete <id> · /content\n\n' +
   'Транспорт: /trucks /truck_add /truck_edit /truck_delete\n' +
   'ТО: /maintenance /maintenance_add /maintenance_done <id>\n\n' +
-  'Аналитика: /analytics /report /dashboard\n\n' +
+  'Аналитика и бизнес:\n' +
+  '/analytics · /top_pages · /sources · /conversion\n' +
+  '/dashboard — Control Center · /report — отчёт директора\n\n' +
   'Проектная память: /docs · /roadmap · /session_log <текст>\n\n' +
   'Аудит и бэкапы:\n' +
   '/audit · /audit_last · /audit_search <слово>\n' +
@@ -885,63 +895,168 @@ bot.command('content', async (ctx) => {
   )
 })
 
-// ===== E15 — Analytics =====
+// ===== E23 — Analytics Intelligence (GA4 + CRM) =====
+
+const GA_HINT =
+  'ℹ️ GA4 не подключён. Добавьте в .env: GA4_PROPERTY_ID + сервис-аккаунт\n' +
+  '(GA_CLIENT_EMAIL, GA_PRIVATE_KEY) или GA4_ACCESS_TOKEN.'
+
+// --- /analytics (сводка трафика + заявки/конверсия) ---
 bot.command('analytics', async (ctx) => {
-  await ctx.reply(
-    '📊 Аналитика\n\nВеб-аналитика пока не подключена.\n' +
-      'Подключите Vercel Analytics или Яндекс.Метрику, затем добавим показатели ' +
-      '(посетители, страницы, источники) сюда.',
-  )
+  try {
+    await logEvent({ userId: ctx.from.id, action: 'analytics_view', details: 'overview 7d' })
+    const ov = await getOverview(7)
+    const num = (v) => (v == null ? '— (GA4 не подключён)' : v)
+    let msg =
+      '📈 Аналитика (7 дней)\n\n' +
+      `Посетители:\n${num(ov.visitors)}\n\n` +
+      `Просмотры страниц:\n${num(ov.pageViews)}\n\n` +
+      `Сессии:\n${num(ov.sessions)}\n\n` +
+      `Заявки:\n${ov.leads} (за 7 дней: ${ov.leadsWeek})\n\n` +
+      `Конверсия (закрыто/всего):\n${ov.conversion}%`
+    if (!ov.gaConfigured) msg += `\n\n${GA_HINT}`
+    else if (ov.gaError) msg += `\n\n⚠️ GA4: ${ov.gaError}`
+    await ctx.reply(msg)
+  } catch (err) {
+    await ctx.reply(`❌ /analytics недоступен\nОшибка: ${err.message}`)
+  }
 })
 
-// ===== E17 — AI Business Analyst (rule-based) =====
+// --- /top_pages (ТОП страниц) ---
+bot.command('top_pages', async (ctx) => {
+  try {
+    const r = await getTopPages(7, 7)
+    if (!r.configured) {
+      await ctx.reply('🗂 ТОП страниц\n\n' + GA_HINT)
+      return
+    }
+    if (r.error) {
+      await ctx.reply(`🗂 ТОП страниц\n\n⚠️ GA4: ${r.error}`)
+      return
+    }
+    if (!r.rows.length) {
+      await ctx.reply('🗂 ТОП страниц\n\nНет данных за период.')
+      return
+    }
+    await ctx.reply(
+      '🗂 ТОП страниц (7 дней)\n\n' +
+        r.rows.map((p, i) => `${i + 1}. ${p.path}\n   ${p.views} просмотров`).join('\n'),
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /top_pages недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /sources (источники трафика) ---
+bot.command('sources', async (ctx) => {
+  try {
+    const r = await getTrafficSources(7)
+    if (!r.configured) {
+      await ctx.reply('🌐 Источники трафика\n\n' + GA_HINT)
+      return
+    }
+    if (r.error) {
+      await ctx.reply(`🌐 Источники трафика\n\n⚠️ GA4: ${r.error}`)
+      return
+    }
+    if (!r.rows.length) {
+      await ctx.reply('🌐 Источники трафика\n\nНет данных за период.')
+      return
+    }
+    await ctx.reply(
+      '🌐 Источники трафика (7 дней)\n\n' +
+        r.rows.map((s) => `${s.source}: ${s.sessions} сессий`).join('\n'),
+    )
+  } catch (err) {
+    await ctx.reply(`❌ /sources недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// --- /conversion (конверсия по заявкам — реальные данные CRM) ---
+bot.command('conversion', async (ctx) => {
+  try {
+    const c = await getConversion(7)
+    let msg =
+      '🎯 Конверсия\n\n' +
+      `Заявки: всего ${c.total} · сегодня ${c.today} · неделя ${c.week} · месяц ${c.month}\n` +
+      `Закрыто: ${c.closed}\n` +
+      `Конверсия (закрыто/всего): ${c.conversionPct}%`
+    if (c.siteConversionPct != null) {
+      msg += `\n\nКонверсия сайта (заявки/сессии, 7д):\n${c.siteConversionPct}% (${c.week}/${c.sessions})`
+    } else if (!c.gaConfigured) {
+      msg += `\n\nКонверсия сайта по сессиям недоступна.\n${GA_HINT}`
+    }
+    await ctx.reply(msg)
+  } catch (err) {
+    await ctx.reply(`❌ /conversion недоступен\nОшибка: ${err.message}`)
+  }
+})
+
+// ===== E25 — AI Director (/report) =====
 bot.command('report', async (ctx) => {
   try {
-    const [s, h, p] = await Promise.all([leadStats(), checkHealth(), readPrices().catch(() => ({}))])
-    const problems = []
-    if (!h.ok) problems.push('• сайт недоступен')
-    if (s.byStatus.new > 0) problems.push(`• ${s.byStatus.new} необработанных заявок`)
-    if (s.byStatus.callback > 0) problems.push(`• ${s.byStatus.callback} ждут перезвона`)
-    const recs = []
-    if (s.byStatus.new > 0) recs.push('• обработать новые заявки (/leads, /lead_work)')
-    if (s.conversion < 30 && s.total >= 5) recs.push('• низкая конверсия — проработать отказы')
-    if (!recs.length) recs.push('• всё под контролем')
-    await ctx.reply(
-      '🧠 Бизнес-отчёт\n\n' +
-        `Заявки: всего ${s.total}, сегодня ${s.today}, за 7 дней ${s.week}\n` +
-        `Конверсия: ${s.conversion}%\n` +
-        `Воронка: new ${s.byStatus.new} / work ${s.byStatus.in_progress} / callback ${s.byStatus.callback} / closed ${s.byStatus.closed} / reject ${s.byStatus.rejected}\n` +
-        `Сайт: ${h.ok ? '🟢 online' : '🔴 offline'}\n\n` +
-        'Проблемы:\n' + (problems.length ? problems.join('\n') : '• не выявлено') +
-        '\n\nРекомендации:\n' + recs.join('\n'),
-    )
+    await logEvent({ userId: ctx.from.id, action: 'director_report', details: 'manual /report' })
+    const { text } = await directorReport()
+    await ctx.reply(text)
   } catch (err) {
     await ctx.reply(`❌ /report недоступен\nОшибка: ${err.message}`)
   }
 })
 
-// ===== E20 — Executive Dashboard =====
+// ===== E24 — FAVORIT Control Center (/dashboard) =====
 bot.command('dashboard', async (ctx) => {
   try {
-    const [h, p, s] = await Promise.all([
-      checkHealth(),
-      readPrices().catch(() => ({})),
-      leadStats(),
-    ])
-    const stLine = (id) => {
-      const st = p.stations?.[id]
-      return FUEL_KEYS.map((k) => `${LABELS[k]} ${st?.fuel?.[k] ?? '—'}`).join(' / ')
-    }
+    await logEvent({ userId: ctx.from.id, action: 'dashboard_view', details: 'control center' })
+    const [h, p, s, leadsData, reminders, newsList, promoList, v, backups, lastDep, lastEv] =
+      await Promise.all([
+        checkHealth(),
+        readPrices().catch(() => ({})),
+        leadStats(),
+        readLeads().catch(() => ({ leads: [] })),
+        listReminders().catch(() => []),
+        news.list().catch(() => []),
+        promos.list().catch(() => []),
+        gitVersion(),
+        listBackups().catch(() => []),
+        lastEventMatching(['deploy', 'publish', 'price_update']).catch(() => null),
+        lastEvent().catch(() => null),
+      ])
+
+    const stationCount = p.stations ? Object.keys(p.stations).length : 0
+    const now = Date.now()
+    const month = (leadsData.leads ?? []).filter(
+      (l) => now - new Date(l.createdAt).getTime() <= 30 * 86400000,
+    ).length
+
+    // Актуальность цен: обновлены за последние 7 дней.
+    const priceAge = p.updatedAt ? (now - new Date(p.updatedAt).getTime()) / 86400000 : null
+    const pricesLine =
+      priceAge == null
+        ? '—'
+        : priceAge <= 7
+          ? `АКТУАЛЬНЫ (обновлены ${formatTs(p.updatedAt)})`
+          : `⚠️ УСТАРЕЛИ (обновлены ${formatTs(p.updatedAt)})`
+
+    const lastBackupName = backups[0]?.name ?? '—'
+    const lastDeployLine = lastDep ? `${lastDep.action} · ${formatRu(lastDep.createdAt)}` : '—'
+    const lastAuditLine = lastEv ? `${lastEv.action} · ${formatRu(lastEv.createdAt)}` : '—'
+
     await ctx.reply(
-      '🗂 Executive Dashboard\n\n' +
-        `Сайт: ${h.ok ? '🟢 ONLINE' : '🔴 OFFLINE'}\n\n` +
-        `${p.stations?.azs1?.name ?? 'АЗС №1'}:\n${stLine('azs1')}\n\n` +
-        `${p.stations?.azs2?.name ?? 'АЗС №2'}:\n${stLine('azs2')}\n\n` +
-        `Новые заявки: ${s.byStatus.new}\n` +
-        `В работе: ${s.byStatus.in_progress}\n` +
-        `Перезвонить: ${s.byStatus.callback}\n` +
-        `Закрыто: ${s.byStatus.closed}\n\n` +
-        `Цены обновлены: ${formatTs(p.updatedAt)}`,
+      '🏢 FAVORIT CONTROL CENTER\n\n' +
+        `Сайт:\n${h.ok ? '🟢 ONLINE' : '🔴 OFFLINE'}\n\n` +
+        `Цены:\n${pricesLine}\n\n` +
+        `АЗС:\n${stationCount}\n\n` +
+        `Заявки:\nсегодня ${s.today} · неделя ${s.week} · месяц ${month}\n\n` +
+        `Лиды:\nnew ${s.byStatus.new} · in_progress ${s.byStatus.in_progress} · ` +
+        `closed ${s.byStatus.closed} · rejected ${s.byStatus.rejected}\n\n` +
+        `Напоминания: ${reminders.length}\n` +
+        `Новости: ${newsList.length}\n` +
+        `Акции: ${promoList.length}\n\n` +
+        `Последний deploy: ${lastDeployLine}\n` +
+        `Последний backup: ${lastBackupName}\n` +
+        `Последний audit: ${lastAuditLine}\n\n` +
+        `Git branch: ${v.branch ?? '—'}\n` +
+        `Последний commit: ${v.commit ?? '—'}`,
     )
   } catch (err) {
     await ctx.reply(`❌ /dashboard недоступен\nОшибка: ${err.message}`)
@@ -1470,20 +1585,9 @@ async function tickDailyReport() {
     const now = new Date()
     if (now.getHours() === 8 && now.getDate() !== lastDailyReportDay) {
       lastDailyReportDay = now.getDate()
-      const [s, h, p, v] = await Promise.all([
-        leadStats(),
-        checkHealth(),
-        readPrices().catch(() => ({})),
-        gitVersion(),
-      ])
-      const text =
-        '📅 Ежедневный отчёт\n\n' +
-        `Заявки: всего ${s.total}, новых ${s.byStatus.new}, сегодня ${s.today}\n` +
-        `Сайт: ${h.ok ? '🟢 online' : '🔴 offline'}\n` +
-        `Последний коммит: ${v.commit ?? '—'}\n` +
-        `Цены АЗС №1: ${FUEL_KEYS.map((k) => `${LABELS[k]} ${p.stations?.azs1?.fuel?.[k] ?? '—'}`).join(' / ')}\n` +
-        `Цены АЗС №2: ${FUEL_KEYS.map((k) => `${LABELS[k]} ${p.stations?.azs2?.fuel?.[k] ?? '—'}`).join(' / ')}\n` +
-        `Цены обновлены: ${formatTs(p.updatedAt)}`
+      // E25 — Daily Business Report от AI Director.
+      const { text } = await dailyReport()
+      await logEvent({ userId: 'system', action: 'director_report', details: 'daily 08:00' })
       for (const id of config.adminIds) {
         try {
           await bot.api.sendMessage(id, text)
